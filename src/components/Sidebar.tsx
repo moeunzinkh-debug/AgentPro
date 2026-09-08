@@ -6,7 +6,6 @@ import {
   ListTodo,
   MessageSquare,
   Settings,
-  Sparkles,
 } from 'lucide-react';
 import { NavTab } from '../types';
 
@@ -54,13 +53,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`border-r border-white/10 flex flex-col glass select-none z-30 transition-all duration-200 relative shrink-0 ${
-        collapsed ? 'w-12' : 'w-36'
+      className={`mobile-navigation order-last md:order-first border-t md:border-t-0 md:border-r border-white/10 flex md:flex-col glass select-none z-30 relative shrink-0 ${
+        collapsed ? 'w-full md:w-12' : 'w-full md:w-36'
       }`}
     >
       {/* Brand Header with Cyan Neon Dot */}
       <div
-        className={`border-b border-white/10 flex items-center justify-between ${
+        className={`border-b border-white/10 hidden md:flex items-center justify-between ${
           collapsed ? 'py-2.5 px-2 justify-center' : 'py-2.5 px-2.5'
         }`}
       >
@@ -93,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 p-1.5 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav aria-label="Main navigation" className="flex flex-1 md:block p-1.5 gap-1 md:space-y-1 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;
@@ -103,16 +102,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               key={item.id}
               type="button"
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center rounded-lg text-xs font-medium transition-all relative group cursor-pointer ${
+              className={`w-full min-w-0 flex flex-col md:flex-row justify-center gap-1 min-h-12 md:min-h-0 items-center rounded-lg text-xs font-medium transition-all relative group cursor-pointer ${
                 collapsed
                   ? 'justify-center p-2'
-                  : 'gap-2 px-2 py-1.5'
+                  : 'md:gap-2 px-2 py-1.5'
               } ${
                 isActive
                   ? 'bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 shadow-[0_0_10px_rgba(0,242,255,0.15)] font-semibold'
                   : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
               }`}
               title={item.label}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
             >
               <Icon
                 className={`w-3.5 h-3.5 shrink-0 transition-transform ${
@@ -120,16 +121,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               />
 
-              {!collapsed && (
-                <div className="flex-1 text-left truncate flex items-center justify-between">
-                  <span className="truncate text-[11px]">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[9px] px-1 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-              )}
+              <div className={`min-w-0 md:flex-1 text-left truncate flex items-center justify-between gap-1 ${collapsed ? 'md:hidden' : ''}`}>
+                <span className="truncate text-[11px]">{item.label}</span>
+                {item.badge && (
+                  <span className="text-[9px] px-1 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
 
               {/* Collapsed active indicator dot */}
               {collapsed && isActive && (
@@ -141,7 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Bottom Footer / Expand Button */}
-      <div className="p-1.5 border-t border-white/10 mt-auto bg-black/20">
+      <div className="hidden md:block p-1.5 border-t border-white/10 mt-auto bg-black/20">
         {collapsed ? (
           <button
             type="button"

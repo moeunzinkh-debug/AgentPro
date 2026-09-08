@@ -60,12 +60,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
       {/* Ambient radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.05)_0%,transparent_50%)] pointer-events-none z-0" />
 
       {/* Settings Header matching Immersive UI */}
-      <div className="px-6 py-5 border-b border-white/10 glass z-10">
+      <div className="shrink-0 px-4 md:px-6 py-4 md:py-5 border-b border-white/10 glass z-10">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.2)]">
             <SlidersHorizontal className="h-4 w-4" />
@@ -81,7 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
         </div>
 
         {/* Tab Navigation: Theme, Model Parameters, About */}
-        <div className="flex gap-2 mt-4">
+        <div className="flex flex-wrap gap-2 mt-4">
           <button
             onClick={() => setActiveTab('theme')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -121,7 +121,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
       </div>
 
       {/* Main Settings Content */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-4xl z-10 custom-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 max-w-4xl z-10 custom-scrollbar">
         {/* 1. THEME SECTION */}
         {activeTab === 'theme' && (
           <div className="space-y-6">

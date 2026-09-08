@@ -175,7 +175,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const providerKeys: ProviderType[] = ['gemini', 'openai', 'grok', 'kimi', 'deepseek', 'custom'];
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#07090d] overflow-y-auto custom-scrollbar p-5 md:p-8">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#07090d] overflow-y-auto custom-scrollbar p-5 md:p-8">
       <div className="max-w-2xl mx-auto w-full space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">

@@ -125,12 +125,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
       {/* Ambient radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.05)_0%,transparent_50%)] pointer-events-none z-0" />
 
       {/* Header matching Immersive UI */}
-      <div className="px-6 py-5 border-b border-white/10 glass z-10 flex items-center justify-between">
+      <div className="shrink-0 px-4 md:px-6 py-4 md:py-5 border-b border-white/10 glass z-10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.2)]">
             <ListTodo className="h-4 w-4" />
@@ -154,9 +154,9 @@ export const TasksView: React.FC<TasksViewProps> = ({
       </div>
 
       {/* Main split view */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden z-10">
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden z-10">
         {/* Left column: Task Selection */}
-        <div className="w-full lg:w-80 border-r border-white/10 p-4 space-y-2 overflow-y-auto glass custom-scrollbar">
+        <div className="w-full lg:w-80 shrink-0 border-b lg:border-b-0 lg:border-r border-white/10 p-4 space-y-2 lg:overflow-y-auto glass custom-scrollbar">
           <div className="text-[11px] uppercase tracking-wider text-white/40 font-bold px-2 mb-2">
             Workflows Catalog
           </div>
@@ -196,10 +196,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
         </div>
 
         {/* Right column: Execution Workspace */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-5 custom-scrollbar">
+        <div className="min-w-0 shrink-0 lg:flex-1 flex flex-col lg:overflow-y-auto p-4 md:p-6 space-y-5 custom-scrollbar">
           {/* Prompt Editor */}
-          <div className="rounded-xl glass border border-white/10 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="shrink-0 rounded-xl glass border border-white/10 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] uppercase tracking-wider font-bold text-white/80 flex items-center gap-2">
                 <Bot className="h-4 w-4 text-cyan-400" />
                 Task Configuration
@@ -220,7 +220,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               placeholder="Task instructions..."
             />
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="text-[11px] text-white/40">
                 Executes via <strong className="text-cyan-400 font-mono">{activeModel.name}</strong>
               </span>
@@ -246,7 +246,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           {/* Execution Progress & Result */}
           {isExecuting && (
-            <div className="rounded-xl glass border border-cyan-500/40 p-4 space-y-3 shadow-[0_0_16px_rgba(0,242,255,0.15)]">
+            <div className="shrink-0 rounded-xl glass border border-cyan-500/40 p-4 space-y-3 shadow-[0_0_16px_rgba(0,242,255,0.15)]">
               <div className="text-xs font-bold text-cyan-300 flex items-center gap-2 uppercase tracking-wide">
                 <RotateCw className="h-4 w-4 animate-spin text-cyan-400" />
                 Autonomous Plan Execution
@@ -282,7 +282,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           {/* Reasoning trace if present */}
           {executionReasoning && (
-            <div className="rounded-xl glass border border-cyan-500/30 p-4 text-xs font-mono text-cyan-400/90 space-y-1">
+            <div className="shrink-0 rounded-xl glass border border-cyan-500/30 p-4 text-xs font-mono text-cyan-400/90 space-y-1">
               <div className="font-bold text-cyan-300 text-[11px] uppercase tracking-wider mb-1">
                 Internal Reasoning Trace:
               </div>
@@ -292,8 +292,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           {/* Output Card */}
           {executionResult && (
-            <div className="rounded-xl glass border border-white/10 p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="shrink-0 rounded-xl glass border border-white/10 p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
                 <div className="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-wide">
                   <CheckCircle2 className="h-4 w-4 text-cyan-400" />
                   Task Execution Output
