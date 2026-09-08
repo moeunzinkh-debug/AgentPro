@@ -1,5 +1,6 @@
 import { AppSettings, Conversation, ModelInfo, ProviderConfig, ProviderType } from '../types';
 import { INITIAL_MODELS, INITIAL_PROVIDERS } from '../data/defaultCatalog';
+import { normalizeBaseUrl } from '../utils/url';
 
 const STORAGE_KEYS = {
   CONVERSATIONS: 'agentpro_conversations_v1',
@@ -54,7 +55,19 @@ export function loadProviders(): Record<string, ProviderConfig> {
     const raw = localStorage.getItem(STORAGE_KEYS.PROVIDERS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { ...INITIAL_PROVIDERS, ...parsed };
+      // Repair common base URL typos (e.g. "ttps://..." -> "https://...")
+      // in previously saved provider configs so they self-heal on load.
+      const healed: Record<string, ProviderConfig> = {};
+      for (const [key, config] of Object.entries(parsed || {}) as Array<[string, any]>) {
+        if (config && typeof config === 'object') {
+          const cfg = config as ProviderConfig;
+          healed[key] = {
+            ...cfg,
+            ...(typeof cfg.baseUrl === 'string' ? { baseUrl: normalizeBaseUrl(cfg.baseUrl) } : {}),
+          };
+        }
+      }
+      return { ...INITIAL_PROVIDERS, ...healed };
     }
   } catch (e) {
     console.warn('Failed to load providers:', e);
@@ -116,8 +129,15 @@ export function loadModels(): ModelInfo[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        // Return only user saved/fetched models
-        return parsed.filter((m: ModelInfo) => m.isUserSaved);
+        // Return only user saved/fetched models, repairing base URL typos
+        // (e.g. "ttps://..." -> "https://...") in saved endpoints.
+        return parsed
+          .filter((m: ModelInfo) => m.isUserSaved)
+          .map((m: ModelInfo) =>
+            typeof m.customBaseUrl === 'string'
+              ? { ...m, customBaseUrl: normalizeBaseUrl(m.customBaseUrl) }
+              : m
+          );
       }
     }
   } catch (e) {

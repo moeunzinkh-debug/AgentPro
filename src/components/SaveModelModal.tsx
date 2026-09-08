@@ -13,6 +13,7 @@ import {
 import { ProviderConfig, ProviderType } from '../types';
 import { PROVIDER_PRESETS } from '../data/defaultCatalog';
 import { ModelSelectorDropdown } from './ModelSelectorDropdown';
+import { normalizeBaseUrl } from '../utils/url';
 
 interface SaveModelModalProps {
   isOpen: boolean;
@@ -103,7 +104,7 @@ export const SaveModelModal: React.FC<SaveModelModalProps> = ({
       name: name.trim(),
       apiProvider: selectedProvider,
       apiKey: api.trim(),
-      baseUrl: url.trim() || currentPreset.defaultUrl,
+      baseUrl: normalizeBaseUrl(url) || currentPreset.defaultUrl,
       modelId: model.trim(),
       contextLength: 65536,
     });

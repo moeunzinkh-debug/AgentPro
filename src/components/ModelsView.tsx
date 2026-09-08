@@ -14,6 +14,7 @@ import {
 import { ModelInfo, ProviderConfig, ProviderType } from '../types';
 import { PROVIDER_PRESETS } from '../data/defaultCatalog';
 import { ModelSelectorDropdown } from './ModelSelectorDropdown';
+import { normalizeBaseUrl } from '../utils/url';
 
 interface ModelsViewProps {
   models: ModelInfo[];
@@ -109,7 +110,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       tags: [currentPreset.name, 'Active'],
       isUserSaved: true,
       customApiKey: api.trim(),
-      customBaseUrl: url.trim() || currentPreset.defaultUrl,
+      customBaseUrl: normalizeBaseUrl(url) || currentPreset.defaultUrl,
     };
 
     // Update models state
@@ -124,7 +125,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         [selectedProvider]: {
           ...current,
           apiKey: api.trim(),
-          baseUrl: url.trim() || current.baseUrl,
+          baseUrl: normalizeBaseUrl(url) || current.baseUrl,
           isConfigured: true,
         },
       };

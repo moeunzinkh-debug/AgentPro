@@ -1,5 +1,6 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { ModelInfo, ProviderType } from '../types';
+import { normalizeBaseUrl } from '../utils/url';
 
 export function parseApiErrorMessage(err: any): string {
   if (!err) return 'Unknown error occurred';
@@ -102,7 +103,9 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
   provider: ProviderType;
   tokensUsed?: number;
 }> {
-  const { provider, model, messages, apiKey, baseUrl, parameters, images } = body;
+  const { provider, model, messages, apiKey, baseUrl: rawBaseUrl, parameters, images } = body;
+  // Repair common base URL typos (e.g. "ttps://..." -> "https://...") before any fetch.
+  const baseUrl = normalizeBaseUrl(rawBaseUrl);
   const sysPrompt = parameters?.systemPrompt || 'You are Agent Pro, an advanced and helpful AI assistant.';
 
   // 1. Google Gemini
@@ -713,7 +716,9 @@ export async function handleChatStreamRequest(
   body: ChatRequestBody,
   onChunk: (chunk: { content?: string; reasoning?: string; model?: string }) => void
 ): Promise<void> {
-  const { provider, model, messages, apiKey, baseUrl, parameters, images } = body;
+  const { provider, model, messages, apiKey, baseUrl: rawBaseUrl, parameters, images } = body;
+  // Repair common base URL typos (e.g. "ttps://..." -> "https://...") before any fetch.
+  const baseUrl = normalizeBaseUrl(rawBaseUrl);
   const sysPrompt = parameters?.systemPrompt || 'You are Agent Pro, an advanced and helpful AI assistant.';
 
   // 1. Google Gemini streaming
@@ -1007,10 +1012,13 @@ export async function handleFetchModels(
   apiKey?: string,
   baseUrl?: string
 ): Promise<ModelInfo[]> {
+  // Repair common base URL typos (e.g. "ttps://..." -> "https://...") before any fetch.
+  const safeBaseUrl = normalizeBaseUrl(baseUrl);
+
   // 1. xKiro (Moonshot / Kimi AI) live models
   if (provider === 'xkiro') {
     const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY;
-    const endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+    const endpoint = safeBaseUrl || 'https://api.moonshot.cn/v1';
 
     if (!key || !key.trim()) {
       throw new Error(
@@ -1212,17 +1220,17 @@ export async function handleFetchModels(
   }
 
   // 4. Custom endpoint live models
-  if (provider === 'custom' && baseUrl) {
+  if (provider === 'custom' && safeBaseUrl) {
     const headers: Record<string, string> = {};
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, { headers });
+    const res = await fetch(`${safeBaseUrl.replace(/\/+$/, '')}/models`, { headers });
     if (res.ok) {
       const json = await res.json();
       return (json.data || []).map((m: any) => ({
         id: `custom-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
         name: m.id,
         provider: 'custom' as ProviderType,
-        description: `Custom model from ${baseUrl}`,
+        description: `Custom model from ${safeBaseUrl}`,
         contextLength: 32768,
         isFree: true,
         category: 'general',

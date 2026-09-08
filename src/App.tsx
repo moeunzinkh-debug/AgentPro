@@ -34,6 +34,7 @@ import {
   saveSettings,
 } from './services/storage';
 import { sendChatMessage, sendChatMessageStream } from './services/apiClient';
+import { normalizeBaseUrl } from './utils/url';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ModelsView } from './components/ModelsView';
@@ -177,7 +178,7 @@ export default function App() {
           [model.provider]: {
             ...curr,
             apiKey: apiKey ? apiKey.trim() : curr.apiKey,
-            baseUrl: baseUrl ? baseUrl.trim() : curr.baseUrl,
+            baseUrl: baseUrl ? normalizeBaseUrl(baseUrl) : curr.baseUrl,
             isConfigured: Boolean(apiKey?.trim() || curr.apiKey?.trim()),
           },
         };
@@ -225,7 +226,7 @@ export default function App() {
         [provider]: {
           ...curr,
           apiKey: apiKey.trim(),
-          baseUrl: baseUrl?.trim() || curr.baseUrl,
+          baseUrl: baseUrl ? normalizeBaseUrl(baseUrl) : curr.baseUrl,
           isConfigured: apiKey.trim().length > 0,
         },
       };
@@ -264,7 +265,7 @@ export default function App() {
       tags: ['Custom', data.apiProvider.toUpperCase(), 'Saved'],
       isUserSaved: true,
       customApiKey: data.apiKey,
-      customBaseUrl: data.baseUrl,
+      customBaseUrl: data.baseUrl ? normalizeBaseUrl(data.baseUrl) : undefined,
     };
 
     // 1. Update models state (insert at top or update if existing)
@@ -293,7 +294,7 @@ export default function App() {
           [data.apiProvider]: {
             ...current,
             apiKey: data.apiKey || current.apiKey,
-            baseUrl: data.baseUrl || current.baseUrl,
+            baseUrl: data.baseUrl ? normalizeBaseUrl(data.baseUrl) : current.baseUrl,
             isConfigured: true,
           },
         };
