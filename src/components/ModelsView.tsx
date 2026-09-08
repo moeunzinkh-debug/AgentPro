@@ -175,7 +175,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const providerKeys: ProviderType[] = ['gemini', 'openai', 'grok', 'kimi', 'deepseek', 'custom'];
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#07090d] overflow-y-auto custom-scrollbar p-5 md:p-8">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#07090d] overflow-y-auto overflow-x-hidden custom-scrollbar p-5 md:p-8">
       <div className="max-w-2xl mx-auto w-full space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
@@ -439,32 +439,43 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                         : 'bg-white/[0.03] border-white/10 hover:border-white/20'
                     }`}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span
                           className={`w-2 h-2 rounded-full shrink-0 ${
                             isActive ? 'bg-cyan-400 neon-glow' : 'bg-white/30'
                           }`}
                         />
-                        <span className="text-sm font-bold text-white">{m.name}</span>
+                        <span className="text-sm font-bold text-white min-w-0 [overflow-wrap:anywhere]">
+                          {m.name}
+                        </span>
                         {preset && (
-                          <span className="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                          <span className="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/10 shrink-0">
                             {preset.badge || preset.brand}
                           </span>
                         )}
                         {isActive && (
-                          <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                          <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full border border-cyan-500/40 shrink-0">
                             Current Used Model
                           </span>
                         )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/50 font-mono pl-4">
-                        <span>Model: <span className="text-white/80">{m.providerModelId}</span></span>
+                        <span className="flex items-center gap-1 min-w-0 max-w-full">
+                          <span className="shrink-0">Model:</span>
+                          <span className="text-white/80 truncate">{m.providerModelId}</span>
+                        </span>
                         {m.customBaseUrl && (
-                          <span>url: <span className="text-cyan-300/80 truncate max-w-xs">{m.customBaseUrl}</span></span>
+                          <span className="flex items-center gap-1 min-w-0 max-w-full">
+                            <span className="shrink-0">url:</span>
+                            <span className="text-cyan-300/80 truncate">{m.customBaseUrl}</span>
+                          </span>
                         )}
-                        <span>Api: <span className="text-white/40">{maskKey(m.customApiKey)}</span></span>
+                        <span className="flex items-center gap-1 min-w-0 max-w-full">
+                          <span className="shrink-0">Api:</span>
+                          <span className="text-white/40 truncate">{maskKey(m.customApiKey)}</span>
+                        </span>
                       </div>
                     </div>
 
