@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { ModelInfo, ProviderConfig, ProviderType } from '../types';
+import { normalizeBaseUrl } from '../utils/url';
 
 interface ModelSelectionModalProps {
   isOpen: boolean;
@@ -122,7 +123,7 @@ export const ModelSelectionModal: React.FC<ModelSelectionModalProps> = ({
       tags: ['Custom Endpoint', 'Active'],
       isUserSaved: true,
       customApiKey: customApi.trim() || undefined,
-      customBaseUrl: customEndpoint.trim(),
+      customBaseUrl: normalizeBaseUrl(customEndpoint),
     };
 
     onSelectAndActivateModel(newModel, customApi.trim() || undefined, customEndpoint.trim());

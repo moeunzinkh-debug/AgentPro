@@ -1,4 +1,5 @@
 import { ModelInfo, ModelParameters, ProviderConfig, ProviderType } from '../types';
+import { normalizeBaseUrl } from '../utils/url';
 
 export function cleanErrorMessage(rawError: any): string {
   if (!rawError) return 'An unexpected error occurred.';
@@ -63,6 +64,7 @@ export async function sendChatMessageStream(
   signal?: AbortSignal
 ): Promise<ChatApiResponse> {
   const { provider, providerModelId, messages, parameters, images, providerConfig } = req;
+  const safeBaseUrl = normalizeBaseUrl(providerConfig.baseUrl);
 
   const res = await fetch('/api/chat?stream=true', {
     method: 'POST',
@@ -75,7 +77,7 @@ export async function sendChatMessageStream(
       model: providerModelId,
       messages,
       apiKey: providerConfig.apiKey || undefined,
-      baseUrl: providerConfig.baseUrl || undefined,
+      baseUrl: safeBaseUrl || undefined,
       parameters: {
         temperature: parameters.temperature,
         maxTokens: parameters.maxTokens,
@@ -157,6 +159,7 @@ export async function sendChatMessageStream(
 
 export async function sendChatMessage(req: ChatApiRequest): Promise<ChatApiResponse> {
   const { provider, providerModelId, messages, parameters, images, providerConfig } = req;
+  const safeBaseUrl = normalizeBaseUrl(providerConfig.baseUrl);
 
   try {
     const res = await fetch('/api/chat', {
@@ -169,7 +172,7 @@ export async function sendChatMessage(req: ChatApiRequest): Promise<ChatApiRespo
         model: providerModelId,
         messages,
         apiKey: providerConfig.apiKey || undefined,
-        baseUrl: providerConfig.baseUrl || undefined,
+        baseUrl: safeBaseUrl || undefined,
         parameters: {
           temperature: parameters.temperature,
           maxTokens: parameters.maxTokens,
@@ -251,7 +254,7 @@ export async function fetchLiveProviderModels(
     body: JSON.stringify({
       provider,
       apiKey: apiKey?.trim() || undefined,
-      baseUrl: baseUrl?.trim() || undefined,
+      baseUrl: normalizeBaseUrl(baseUrl) || undefined,
     }),
   });
 
