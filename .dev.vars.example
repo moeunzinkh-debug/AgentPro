@@ -1,0 +1,21 @@
+# Cloudflare Worker local development secrets.
+# Copy this file to `.dev.vars` — wrangler dev injects it like .env for Node.
+# In production, set secrets with: npx wrangler secret put <NAME>
+#
+# All keys are OPTIONAL. The app also lets users enter provider keys
+# per-provider in the Models tab (stored client-side in the browser).
+
+GEMINI_API_KEY="MY_GEMINI_API_KEY"
+
+# Optional provider keys read by the server:
+# OPENROUTER_API_KEY=""
+# XKIRO_API_KEY=""
+# MOONSHOT_API_KEY=""
+# KIMI_API_KEY=""
+# NVIDIA_API_KEY=""
+# DEEPSEEK_API_KEY=""
+# GROK_API_KEY=""
+# XAI_API_KEY=""
+# OPENAI_API_KEY=""
+# HUGGINGFACE_API_KEY=""
+# HF_TOKEN=""
