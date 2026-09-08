@@ -70,3 +70,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 242, 255, 0.3);
 }
+
+/* Let inner panels scroll instead of growing beyond the mobile viewport. */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell {
+  height: 100vh; /* Fallback for browsers without dynamic viewport units. */
+  height: 100dvh;
+  isolation: isolate;
+}
+
+.mobile-navigation {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Avoid nested backdrop-filter compositing artifacts on mobile browsers. */
+@media (max-width: 767px), (pointer: coarse) {
+  .glass, .glass-panel {
+    background: #11171b;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

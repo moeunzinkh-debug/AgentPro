@@ -621,7 +621,7 @@ export default function App() {
   }, [settings.theme]);
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden ${themeClass}`}>
+    <div className={`app-shell flex flex-col md:flex-row w-full overflow-hidden ${themeClass}`}>
       {/* Left Navigation Sidebar matching screenshot */}
       <Sidebar
         activeTab={activeTab}
@@ -630,10 +630,10 @@ export default function App() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
         {/* Toast confirmation notification */}
         {savedToastMsg && (
-          <div className="absolute top-4 right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#090b0e]/95 border border-cyan-400 text-cyan-300 text-xs font-semibold shadow-[0_0_25px_rgba(0,242,255,0.4)] backdrop-blur-xl animate-fade-in">
+          <div className="absolute top-4 left-4 sm:left-auto right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#090b0e]/95 border border-cyan-400 text-cyan-300 text-xs font-semibold shadow-[0_0_25px_rgba(0,242,255,0.4)] backdrop-blur-xl animate-fade-in">
             <CheckCircle className="h-4 w-4 text-cyan-400 shrink-0" />
             <span>{savedToastMsg}</span>
           </div>

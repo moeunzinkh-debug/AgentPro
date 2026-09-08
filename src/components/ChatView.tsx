@@ -303,25 +303,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
       {/* Immersive Radial Cyan Glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.06)_0%,transparent_50%)] pointer-events-none z-0" />
 
       {/* Top Header matching Immersive UI */}
-      <header className="h-16 border-b border-white/10 px-6 md:px-8 flex items-center justify-between glass z-10">
-        <div className="flex items-center gap-4">
+      <header className="shrink-0 min-h-16 border-b border-white/10 px-3 md:px-6 xl:px-8 py-3 flex items-center justify-between gap-2 glass z-20">
+        <div className="flex flex-col sm:flex-row sm:items-center min-w-0 flex-1 gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-widest text-white/40">Current Session:</span>
-            <span className="text-sm font-medium text-white max-w-[220px] md:max-w-md truncate">
+            <span className="hidden xl:inline text-xs uppercase tracking-widest text-white/40">Current Session:</span>
+            <span className="text-sm font-medium text-white max-w-[160px] lg:max-w-[220px] truncate">
               {conversation.title || 'New Chat'}
             </span>
           </div>
 
           {/* Active Model Pill */}
-          <div className="relative hidden sm:block">
+          <div className="relative min-w-0">
             <button
               onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-all cursor-pointer ${
+              aria-label="Select active model"
+              aria-expanded={showModelDropdown}
+              className={`max-w-full flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-all cursor-pointer ${
                 activeModel.id === 'unselected' || !activeModel.providerModelId
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-[0_0_15px_rgba(0,242,255,0.25)]'
                   : 'bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300'
@@ -334,18 +336,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     : 'bg-cyan-400 neon-glow'
                 }`}
               />
-              <span className="font-semibold text-white truncate max-w-[140px]">
+              <span className="font-semibold text-white truncate max-w-[140px] min-w-0">
                 {activeModel.id === 'unselected' || !activeModel.providerModelId
                   ? 'Select Model'
                   : activeModel.name}
               </span>
               {activeModel.id !== 'unselected' && activeModel.providerModelId && (
-                <span className="text-[11px] text-cyan-400 uppercase font-mono">
+                <span className="hidden xl:inline text-[11px] text-cyan-400 uppercase font-mono">
                   • {activeModel.provider}
                 </span>
               )}
               {activeModel.provider === 'gemini' && (
-                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/20 border border-amber-500/40 rounded px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_8px_rgba(245,158,11,0.2)]">
+                <span className="text-[10px] text-amber-300 font-bold bg-amber-500/20 border border-amber-500/40 rounded px-1.5 py-0.5 hidden lg:flex shrink-0 items-center gap-1 shadow-[0_0_8px_rgba(245,158,11,0.2)]">
                   <Zap className="h-2.5 w-2.5 fill-amber-300" />
                   Instant Mode
                 </span>
@@ -360,7 +362,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   className="fixed inset-0 z-30"
                   onClick={() => setShowModelDropdown(false)}
                 />
-                <div className="absolute left-0 top-full mt-2 w-84 rounded-2xl glass border border-cyan-500/30 bg-[#090b0e]/95 backdrop-blur-2xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[30rem] overflow-y-auto custom-scrollbar">
+                <div className="absolute left-0 top-full mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-2xl glass border border-cyan-500/30 bg-[#090b0e]/95 backdrop-blur-2xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[min(30rem,50dvh)] overflow-y-auto custom-scrollbar">
                   {/* Dropdown Header */}
                   <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/10 mb-2.5">
                     <div className="text-[10px] uppercase tracking-widest text-white/60 font-bold">
@@ -488,16 +490,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div
           ref={chatViewportRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6 relative z-10 custom-scrollbar"
+          className="flex-1 min-h-0 min-w-0 overflow-y-auto px-3 md:px-8 py-6 space-y-6 relative z-10 custom-scrollbar"
         >
         {conversation.messages.length === 0 ? (
           /* Empty state */
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <div className="flex flex-col items-center justify-center min-h-full text-center px-1 sm:px-4 py-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 mb-4 shadow-[0_0_20px_rgba(0,242,255,0.25)]">
               <MessageSquare className="h-8 w-8 neon-text" />
             </div>
 
-            <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-white tracking-tight flex flex-wrap justify-center items-center gap-2">
               <span>AI Chat</span>
               <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-mono">
                 {activeModel.id === 'unselected' ? 'No Model Selected' : activeModel.name}
@@ -527,7 +529,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   Start an interactive session or select a starter prompt below.
                 </p>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap justify-center items-center gap-3">
                   <button
                     onClick={onNewChat}
                     className="flex items-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 px-6 py-2.5 text-sm font-bold text-black transition-all shadow-[0_0_16px_rgba(0,242,255,0.4)] hover:scale-105 active:scale-95 cursor-pointer"
@@ -842,7 +844,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input Bar matching Immersive UI glass footer */}
-      <div className="p-4 md:p-6 border-t border-white/10 glass z-10">
+      <div className="shrink-0 p-3 md:p-6 border-t border-white/10 glass z-10">
         <div className="max-w-3xl mx-auto space-y-2.5">
           {/* Unconfigured Provider Banner */}
           {!activeProviderConfig.isConfigured && activeModel.provider !== 'gemini' && (
@@ -1021,7 +1023,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask anything or discuss attached files..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-12 text-sm text-white placeholder-white/40 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-colors resize-none leading-relaxed max-h-44"
+              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-12 text-base sm:text-sm text-white placeholder-white/40 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-colors resize-none leading-relaxed max-h-44"
             />
 
             {/* Send button with cyan glow & spinning response animation (🔃) */}
@@ -1049,7 +1051,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between px-1 text-[10px] text-white/30">
+          <div className="flex flex-wrap items-center justify-between gap-1 px-1 text-[10px] text-white/30">
             <div className="flex items-center gap-2">
               <span>
                 Active: <strong className="text-cyan-400 font-mono">{activeModel.name}</strong> (
@@ -1062,7 +1064,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </span>
               )}
             </div>
-            <span>Shift + Enter for newline</span>
+            <span className="hidden sm:inline">Shift + Enter for newline</span>
           </div>
         </div>
       </div>
