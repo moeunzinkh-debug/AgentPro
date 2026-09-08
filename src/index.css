@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --accent: #00f2ff;
+  --bg: #050507;
+  --surface: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.1);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: #e2e2e7;
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Immersive Glassmorphism */
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+
+.glass-panel {
+  background: rgba(10, 12, 16, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Neon Glows */
+.neon-glow {
+  box-shadow: 0 0 12px rgba(0, 242, 255, 0.5);
+}
+
+.neon-glow-sm {
+  box-shadow: 0 0 6px rgba(0, 242, 255, 0.35);
+}
+
+.neon-text {
+  text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);
+}
+
+.accent-border {
+  border-left: 2px solid var(--accent);
+}
+
+/* Radial Ambient Glow */
+.ambient-radial-glow {
+  background-image: radial-gradient(circle at 50% 0%, rgba(0, 242, 255, 0.06) 0%, transparent 50%);
+}
+
+/* Custom delicate scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 255, 0.3);
+}

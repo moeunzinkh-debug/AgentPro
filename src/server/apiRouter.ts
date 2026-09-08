@@ -1,0 +1,1238 @@
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { ModelInfo, ProviderType } from '../types';
+
+export function parseApiErrorMessage(err: any): string {
+  if (!err) return 'Unknown error occurred';
+  let raw = typeof err === 'string' ? err : err.message || String(err);
+
+  // If error has nested JSON string, recursively unpack
+  for (let i = 0; i < 4; i++) {
+    try {
+      const braceIdx = raw.indexOf('{');
+      if (braceIdx !== -1) {
+        const candidate = raw.slice(braceIdx);
+        const parsed = JSON.parse(candidate);
+        if (parsed.error?.message) {
+          raw = parsed.error.message;
+        } else if (parsed.message) {
+          raw = parsed.message;
+        } else if (parsed.error && typeof parsed.error === 'string') {
+          raw = parsed.error;
+        }
+      }
+    } catch {}
+  }
+
+  // Check specific error patterns
+  if (raw.includes('experiencing high demand') || raw.includes('503') || raw.includes('UNAVAILABLE')) {
+    return 'This model is currently experiencing high demand (503). Spikes in demand are temporary. Please try again in a few moments, or select another Gemini version (such as 3.7 or 3.5).';
+  }
+  if (raw.includes('RESOURCE_EXHAUSTED') || raw.includes('429') || raw.includes('quota')) {
+    return 'Quota or rate limit exceeded (429). Please wait a moment or check your API key quota.';
+  }
+  if (raw.includes('API_KEY_INVALID') || raw.includes('API key not valid')) {
+    return 'Gemini API key is invalid or unauthorized. Please verify your API key in the Models tab.';
+  }
+  if (raw.includes('not found') || raw.includes('404')) {
+    return 'The requested model was not found or is unsupported on this endpoint.';
+  }
+
+  return raw.replace(/^[a-zA-Z0-9_]+Error:\s*/, '').trim();
+}
+
+export function resolveGeminiModel(modelName?: string): string {
+  if (!modelName) return 'gemini-3.8-flash';
+  const clean = modelName.replace(/^models\//, '').trim().toLowerCase();
+
+  const aliasMap: Record<string, string> = {
+    'gemini-3.1-flash': 'gemini-3.1-flash-lite',
+    'gemini-3.1-pro': 'gemini-3.1-pro-preview',
+    'gemini-3.5-pro': 'gemini-pro-latest',
+    'gemini-3.6-pro': 'gemini-pro-latest',
+    'gemini-3.7-pro': 'gemini-pro-latest',
+    'gemini-3.8-pro': 'gemini-pro-latest',
+    'gemini-pro': 'gemini-pro-latest',
+    'gemini-flash': 'gemini-flash-latest',
+    'gemini-2.5-flash': 'gemini-3.5-flash',
+  };
+
+  return aliasMap[clean] || clean;
+}
+
+export function getGeminiCandidateModels(requestedModel: string): string[] {
+  const resolved = resolveGeminiModel(requestedModel);
+  const candidates = [resolved];
+
+  if (resolved.includes('3.8')) {
+    candidates.push('gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
+  } else if (resolved.includes('3.7')) {
+    candidates.push('gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
+  } else if (resolved.includes('3.6')) {
+    candidates.push('gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite');
+  } else if (resolved.includes('3.5')) {
+    candidates.push('gemini-3.1-flash-lite', 'gemini-3.7-flash', 'gemini-3.8-flash');
+  } else if (resolved.includes('3.1')) {
+    candidates.push('gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash');
+  } else {
+    candidates.push('gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+export interface ChatRequestBody {
+  provider: ProviderType;
+  model: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  apiKey?: string;
+  baseUrl?: string;
+  parameters?: {
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+    systemPrompt?: string;
+  };
+  images?: string[]; // base64 or data URLs
+}
+
+export async function handleChatRequest(body: ChatRequestBody): Promise<{
+  content: string;
+  reasoning?: string;
+  model: string;
+  provider: ProviderType;
+  tokensUsed?: number;
+}> {
+  const { provider, model, messages, apiKey, baseUrl, parameters, images } = body;
+  const sysPrompt = parameters?.systemPrompt || 'You are Agent Pro, an advanced and helpful AI assistant.';
+
+  // 1. Google Gemini
+  if (provider === 'gemini') {
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error(
+        'Gemini API key is required. Please add your key in Models -> Configure API, or set GEMINI_API_KEY in environment.'
+      );
+    }
+
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    // Format contents for Google GenAI
+    // Combine conversation history
+    const contents: any[] = [];
+
+    // Add user/assistant turns
+    for (const msg of messages) {
+      contents.push({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      });
+    }
+
+    // If there's an image in the latest request, attach it
+    if (images && images.length > 0 && contents.length > 0) {
+      const lastUserIdx = contents.length - 1;
+      for (const img of images) {
+        const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
+        const mimeMatch = img.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        contents[lastUserIdx].parts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          },
+        });
+      }
+    }
+
+    const candidateModels = getGeminiCandidateModels(model || 'gemini-3.8-flash');
+    let lastError: any = null;
+
+    for (let i = 0; i < candidateModels.length; i++) {
+      const activeModel = candidateModels[i];
+      try {
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: activeModel,
+            contents: contents.length > 0 ? contents : 'Hello',
+            config: {
+              systemInstruction: sysPrompt,
+              temperature: parameters?.temperature ?? 0.7,
+              maxOutputTokens: parameters?.maxTokens ?? 4096,
+              topP: parameters?.topP ?? 0.95,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            },
+          });
+        } catch (innerErr: any) {
+          const innerMsg = innerErr?.message || String(innerErr);
+          if (
+            innerMsg.includes('invalid argument') ||
+            innerMsg.includes('INVALID_ARGUMENT') ||
+            innerErr?.status === 400
+          ) {
+            // Fallback immediately to standard config without thinkingConfig
+            response = await ai.models.generateContent({
+              model: activeModel,
+              contents: contents.length > 0 ? contents : 'Hello',
+              config: {
+                systemInstruction: sysPrompt,
+                temperature: parameters?.temperature ?? 0.7,
+                maxOutputTokens: parameters?.maxTokens ?? 4096,
+                topP: parameters?.topP ?? 0.95,
+              },
+            });
+          } else {
+            throw innerErr;
+          }
+        }
+
+        return {
+          content: response.text || '(No text returned)',
+          model: activeModel,
+          provider: 'gemini',
+        };
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        const isTemporary =
+          errMsg.includes('503') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('404') ||
+          errMsg.includes('not found') ||
+          errMsg.includes('invalid argument') ||
+          errMsg.includes('INVALID_ARGUMENT') ||
+          errMsg.includes('400');
+
+        if (isTemporary && i < candidateModels.length - 1) {
+          console.warn(`Gemini model ${activeModel} unavailable or rejected (${errMsg.slice(0, 50)}), trying fallback ${candidateModels[i + 1]}...`);
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
+
+        throw new Error(parseApiErrorMessage(err));
+      }
+    }
+
+    throw new Error(parseApiErrorMessage(lastError));
+  }
+
+  // 2. OpenRouter
+  if (provider === 'openrouter') {
+    const key = apiKey || process.env.OPENROUTER_API_KEY;
+    const isFreeModel = model.endsWith(':free');
+    
+    if (!key && !isFreeModel) {
+      throw new Error(
+        'OpenRouter API key is required for non-free models. Please add your key in Models -> Configure API or switch to a :free model.'
+      );
+    }
+
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key || 'sk-or-v1-free-anonymous'}`,
+        'HTTP-Referer': 'https://agentpro.aistudio.build',
+        'X-Title': 'Agent Pro',
+      },
+      body: JSON.stringify({
+        model: model || 'deepseek/deepseek-r1:free',
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedErr = errText;
+      try {
+        const json = JSON.parse(errText);
+        parsedErr = json.error?.message || json.message || errText;
+      } catch {}
+      throw new Error(`OpenRouter Error (${response.status}): ${parsedErr}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const text = choice?.message?.content || '';
+    const reasoning = choice?.message?.reasoning || choice?.message?.thought;
+
+    return {
+      content: text,
+      reasoning: reasoning || undefined,
+      model: data.model || model,
+      provider: 'openrouter',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 3. NVIDIA NIM
+  if (provider === 'nvidia') {
+    const key = apiKey || process.env.NVIDIA_API_KEY;
+    if (!key) {
+      throw new Error('NVIDIA NIM API key is required. Get 1,000 free inference credits at build.nvidia.com');
+    }
+
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: model || 'meta/llama-3.3-70b-instruct',
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`NVIDIA NIM Error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+
+    return {
+      content: choice?.message?.content || '',
+      reasoning: choice?.message?.reasoning,
+      model: data.model || model,
+      provider: 'nvidia',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 4. Hugging Face
+  if (provider === 'huggingface') {
+    const key = apiKey || process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
+    const targetModel = model || 'meta-llama/Llama-3.2-3B-Instruct';
+
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (key) {
+      headers.Authorization = `Bearer ${key}`;
+    }
+
+    const response = await fetch('https://router.huggingface.co/hf-inference/v1/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 2048,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Hugging Face Error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+
+    return {
+      content: choice?.message?.content || '',
+      model: targetModel,
+      provider: 'huggingface',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 5. xKiro (Kimi AI / Moonshot)
+  if (provider === 'xkiro') {
+    const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY;
+    const endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+
+    if (!key) {
+      throw new Error(
+        'xKiro (Moonshot / Kimi) API key is required. Please go to "Save Model" (Name, Api, Model), enter your API key (sk-...), and click Save to use it.'
+      );
+    }
+
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const response = await fetch(`${endpoint.replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: model || 'kimi-2.6',
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`xKiro Error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+
+    return {
+      content: choice?.message?.content || '',
+      reasoning: choice?.message?.reasoning,
+      model: data.model || model,
+      provider: 'xkiro',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 6. OpenAI (ChatGPT)
+  if (provider === 'openai') {
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    const endpoint = baseUrl || 'https://api.openai.com/v1';
+    if (!key) {
+      throw new Error('OpenAI API key is required. Please provide your API key (sk-...) to use ChatGPT.');
+    }
+    const targetModel = model || 'gpt-4o';
+    const formattedMessages: any[] = [{ role: 'system', content: sysPrompt }];
+    messages.forEach((m, idx) => {
+      if (idx === messages.length - 1 && m.role === 'user' && images && images.length > 0) {
+        formattedMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            ...images.map((img) => ({ type: 'image_url', image_url: { url: img } })),
+          ],
+        });
+      } else {
+        formattedMessages.push({ role: m.role, content: m.content });
+      }
+    });
+
+    const cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+    const fullUrl = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key.trim()}`,
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMsg = errText;
+      try {
+        const j = JSON.parse(errText);
+        parsedMsg = j.error?.message || j.message || errText;
+      } catch {}
+      throw new Error(`OpenAI Error (${response.status}): ${parsedMsg}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    return {
+      content: choice?.message?.content || '',
+      reasoning: choice?.message?.reasoning || choice?.message?.thought,
+      model: data.model || targetModel,
+      provider: 'openai',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 7. Grok (xAI)
+  if (provider === 'grok') {
+    const key = apiKey || process.env.GROK_API_KEY || process.env.XAI_API_KEY;
+    const endpoint = baseUrl || 'https://api.x.ai/v1';
+    if (!key) {
+      throw new Error('Grok (xAI) API key is required. Please provide your xAI API key (xai-...).');
+    }
+    const targetModel = model || 'grok-2-1212';
+    const formattedMessages: any[] = [{ role: 'system', content: sysPrompt }];
+    messages.forEach((m, idx) => {
+      if (idx === messages.length - 1 && m.role === 'user' && images && images.length > 0) {
+        formattedMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            ...images.map((img) => ({ type: 'image_url', image_url: { url: img } })),
+          ],
+        });
+      } else {
+        formattedMessages.push({ role: m.role, content: m.content });
+      }
+    });
+
+    const cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+    const fullUrl = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key.trim()}`,
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMsg = errText;
+      try {
+        const j = JSON.parse(errText);
+        parsedMsg = j.error?.message || j.message || errText;
+      } catch {}
+      throw new Error(`Grok Error (${response.status}): ${parsedMsg}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    return {
+      content: choice?.message?.content || '',
+      reasoning: choice?.message?.reasoning || choice?.message?.thought,
+      model: data.model || targetModel,
+      provider: 'grok',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 8. Kimi (Moonshot AI)
+  if (provider === 'kimi') {
+    const key = apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || process.env.XKIRO_API_KEY;
+    const endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+    if (!key) {
+      throw new Error('Kimi (Moonshot) API key is required. Please enter your Moonshot API key (sk-...).');
+    }
+    const targetModel = model || 'moonshot-v1-8k';
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+    const cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+    const fullUrl = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key.trim()}`,
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMsg = errText;
+      try {
+        const j = JSON.parse(errText);
+        parsedMsg = j.error?.message || j.message || errText;
+      } catch {}
+      throw new Error(`Kimi Error (${response.status}): ${parsedMsg}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    return {
+      content: choice?.message?.content || '',
+      reasoning: choice?.message?.reasoning || choice?.message?.thought,
+      model: data.model || targetModel,
+      provider: 'kimi',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 9. DeepSeek (Official API)
+  if (provider === 'deepseek') {
+    const key = apiKey || process.env.DEEPSEEK_API_KEY;
+    const endpoint = baseUrl || 'https://api.deepseek.com/v1';
+    if (!key) {
+      throw new Error('DeepSeek API key is required. Please enter your DeepSeek API key (sk-...).');
+    }
+    const targetModel = model || 'deepseek-chat';
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+    const cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+    const fullUrl = cleanEndpoint.endsWith('/chat/completions') ? cleanEndpoint : `${cleanEndpoint}/chat/completions`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key.trim()}`,
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMsg = errText;
+      try {
+        const j = JSON.parse(errText);
+        parsedMsg = j.error?.message || j.message || errText;
+      } catch {}
+      throw new Error(`DeepSeek Error (${response.status}): ${parsedMsg}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    return {
+      content: choice?.message?.content || choice?.text || '',
+      reasoning: choice?.message?.reasoning_content || choice?.message?.reasoning || choice?.message?.thought,
+      model: data.model || targetModel,
+      provider: 'deepseek',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  // 10. Custom or Added API (OpenAI-compatible, OpenRouter, DeepSeek, Ollama, etc.)
+  if (provider === 'custom') {
+    let endpoint = baseUrl?.trim();
+    if (!endpoint) {
+      if (model.includes('/')) {
+        // Models with slash like deepseek/deepseek-v4-flash, anthropic/claude-3.5-sonnet, etc.
+        endpoint = 'https://openrouter.ai/api/v1';
+      } else if (model.toLowerCase().startsWith('deepseek')) {
+        endpoint = 'https://api.deepseek.com/v1';
+      } else {
+        endpoint = 'https://openrouter.ai/api/v1';
+      }
+    }
+    const targetModel = model || 'deepseek/deepseek-v4-flash';
+
+    const formattedMessages = [
+      { role: 'system', content: sysPrompt },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://agentpro.aistudio.build',
+      'X-Title': 'Agent Pro',
+    };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey.trim()}`;
+    }
+
+    let cleanEndpoint = endpoint.trim().replace(/\/+$/, '');
+    if (cleanEndpoint === 'https://openrouter.ai') cleanEndpoint = 'https://openrouter.ai/api/v1';
+    if (cleanEndpoint === 'https://api.deepseek.com') cleanEndpoint = 'https://api.deepseek.com/v1';
+    const fullUrl = cleanEndpoint.endsWith('/chat/completions')
+      ? cleanEndpoint
+      : `${cleanEndpoint}/chat/completions`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: targetModel,
+        messages: formattedMessages,
+        temperature: parameters?.temperature ?? 0.7,
+        max_tokens: parameters?.maxTokens ?? 4096,
+        top_p: parameters?.topP ?? 0.95,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedMsg = errText;
+      try {
+        const j = JSON.parse(errText);
+        parsedMsg = j.error?.message || j.message || errText;
+      } catch {}
+      throw new Error(`API Error (${response.status}): ${parsedMsg}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    const text = choice?.message?.content || choice?.text || '';
+    const reasoning = choice?.message?.reasoning || choice?.message?.thought;
+
+    return {
+      content: text,
+      reasoning: reasoning || undefined,
+      model: data.model || targetModel,
+      provider: 'custom',
+      tokensUsed: data.usage?.total_tokens,
+    };
+  }
+
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+
+export async function handleChatStreamRequest(
+  body: ChatRequestBody,
+  onChunk: (chunk: { content?: string; reasoning?: string; model?: string }) => void
+): Promise<void> {
+  const { provider, model, messages, apiKey, baseUrl, parameters, images } = body;
+  const sysPrompt = parameters?.systemPrompt || 'You are Agent Pro, an advanced and helpful AI assistant.';
+
+  // 1. Google Gemini streaming
+  if (provider === 'gemini') {
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error(
+        'Gemini API key is required. Please add your key in Models -> Configure API, or set GEMINI_API_KEY in environment.'
+      );
+    }
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    const contents: any[] = [];
+    for (const msg of messages) {
+      contents.push({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      });
+    }
+
+    if (images && images.length > 0 && contents.length > 0) {
+      const lastUserIdx = contents.length - 1;
+      for (const img of images) {
+        const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
+        const mimeMatch = img.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        contents[lastUserIdx].parts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          },
+        });
+      }
+    }
+
+    const candidateModels = getGeminiCandidateModels(model || 'gemini-3.8-flash');
+    let lastError: any = null;
+    let streamStarted = false;
+
+    for (let i = 0; i < candidateModels.length; i++) {
+      const activeModel = candidateModels[i];
+      try {
+        let responseStream;
+        try {
+          responseStream = await ai.models.generateContentStream({
+            model: activeModel,
+            contents: contents.length > 0 ? contents : 'Hello',
+            config: {
+              systemInstruction: sysPrompt,
+              temperature: parameters?.temperature ?? 0.7,
+              maxOutputTokens: parameters?.maxTokens ?? 4096,
+              topP: parameters?.topP ?? 0.95,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            },
+          });
+        } catch (innerErr: any) {
+          const innerMsg = innerErr?.message || String(innerErr);
+          if (
+            innerMsg.includes('invalid argument') ||
+            innerMsg.includes('INVALID_ARGUMENT') ||
+            innerErr?.status === 400
+          ) {
+            responseStream = await ai.models.generateContentStream({
+              model: activeModel,
+              contents: contents.length > 0 ? contents : 'Hello',
+              config: {
+                systemInstruction: sysPrompt,
+                temperature: parameters?.temperature ?? 0.7,
+                maxOutputTokens: parameters?.maxTokens ?? 4096,
+                topP: parameters?.topP ?? 0.95,
+              },
+            });
+          } else {
+            throw innerErr;
+          }
+        }
+
+        for await (const chunk of responseStream) {
+          if (chunk.text) {
+            streamStarted = true;
+            onChunk({ content: chunk.text, model: activeModel });
+          }
+        }
+        return;
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        const isTemporary =
+          errMsg.includes('503') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('404') ||
+          errMsg.includes('not found') ||
+          errMsg.includes('invalid argument') ||
+          errMsg.includes('INVALID_ARGUMENT') ||
+          errMsg.includes('400');
+
+        // If we already started streaming bytes to the client, we cannot silently switch model mid-stream
+        if (streamStarted) {
+          throw new Error(parseApiErrorMessage(err));
+        }
+
+        // If temporary or parameter error, retry with next candidate model
+        if (isTemporary && i < candidateModels.length - 1) {
+          console.warn(`Gemini model ${activeModel} unavailable or rejected (${errMsg.slice(0, 50)}), switching to fallback ${candidateModels[i + 1]}...`);
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
+
+        throw new Error(parseApiErrorMessage(err));
+      }
+    }
+
+    throw new Error(parseApiErrorMessage(lastError));
+  }
+
+  // 2. OpenAI-compatible endpoints: custom, openrouter, xkiro, nvidia, huggingface
+  let endpoint = baseUrl?.trim();
+  let defaultModel = model;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'HTTP-Referer': 'https://agentpro.aistudio.build',
+    'X-Title': 'Agent Pro',
+  };
+
+  if (provider === 'custom') {
+    if (!endpoint) {
+      if (model.includes('/')) {
+        endpoint = 'https://openrouter.ai/api/v1';
+      } else if (model.toLowerCase().startsWith('deepseek')) {
+        endpoint = 'https://api.deepseek.com/v1';
+      } else {
+        endpoint = 'https://openrouter.ai/api/v1';
+      }
+    }
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey.trim()}`;
+    }
+    defaultModel = model || 'deepseek/deepseek-v4-flash';
+  } else if (provider === 'openai') {
+    endpoint = baseUrl || 'https://api.openai.com/v1';
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'gpt-4o';
+  } else if (provider === 'grok') {
+    endpoint = baseUrl || 'https://api.x.ai/v1';
+    const key = apiKey || process.env.GROK_API_KEY || process.env.XAI_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'grok-2-1212';
+  } else if (provider === 'kimi') {
+    endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+    const key = apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || process.env.XKIRO_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'moonshot-v1-8k';
+  } else if (provider === 'deepseek') {
+    endpoint = baseUrl || 'https://api.deepseek.com/v1';
+    const key = apiKey || process.env.DEEPSEEK_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'deepseek-chat';
+  } else if (provider === 'openrouter') {
+    endpoint = 'https://openrouter.ai/api/v1';
+    const key = apiKey || process.env.OPENROUTER_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'deepseek/deepseek-r1:free';
+  } else if (provider === 'xkiro') {
+    endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+    const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'kimi-2.6';
+  } else if (provider === 'nvidia') {
+    endpoint = 'https://integrate.api.nvidia.com/v1';
+    const key = apiKey || process.env.NVIDIA_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'meta/llama-3.3-70b-instruct';
+  } else if (provider === 'huggingface') {
+    endpoint = 'https://router.huggingface.co/hf-inference/v1';
+    const key = apiKey || process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY;
+    if (key) headers.Authorization = `Bearer ${key.trim()}`;
+    defaultModel = model || 'meta-llama/Llama-3.2-3B-Instruct';
+  } else {
+    throw new Error(`Unsupported provider: ${provider}`);
+  }
+
+  const formattedMessages: any[] = [{ role: 'system', content: sysPrompt }];
+  messages.forEach((m, idx) => {
+    if (idx === messages.length - 1 && m.role === 'user' && images && images.length > 0) {
+      formattedMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: m.content },
+          ...images.map((img) => ({
+            type: 'image_url',
+            image_url: { url: img },
+          })),
+        ],
+      });
+    } else {
+      formattedMessages.push({ role: m.role, content: m.content });
+    }
+  });
+
+  let cleanEndpoint = (endpoint || '').trim().replace(/\/+$/, '');
+  if (cleanEndpoint === 'https://openrouter.ai') cleanEndpoint = 'https://openrouter.ai/api/v1';
+  if (cleanEndpoint === 'https://api.deepseek.com') cleanEndpoint = 'https://api.deepseek.com/v1';
+  const fullUrl = cleanEndpoint.endsWith('/chat/completions')
+    ? cleanEndpoint
+    : `${cleanEndpoint}/chat/completions`;
+
+  const upstreamResponse = await fetch(fullUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: defaultModel,
+      messages: formattedMessages,
+      temperature: parameters?.temperature ?? 0.7,
+      max_tokens: parameters?.maxTokens ?? 4096,
+      top_p: parameters?.topP ?? 0.95,
+      stream: true,
+    }),
+  });
+
+  if (!upstreamResponse.ok) {
+    const errText = await upstreamResponse.text();
+    let parsedMsg = errText;
+    try {
+      const j = JSON.parse(errText);
+      parsedMsg = j.error?.message || j.message || errText;
+    } catch {}
+    throw new Error(`API Error (${upstreamResponse.status}): ${parsedMsg}`);
+  }
+
+  if (!upstreamResponse.body) {
+    throw new Error('No response stream received from upstream API.');
+  }
+
+  const reader = upstreamResponse.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+      if (trimmed.startsWith('data:')) {
+        const dataStr = trimmed.replace(/^data:\s*/, '');
+        if (dataStr === '[DONE]') {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(dataStr);
+          const choice = parsed.choices?.[0];
+          const delta = choice?.delta;
+          const content = delta?.content || '';
+          const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thought || '';
+          if (content || reasoning) {
+            onChunk({ content, reasoning, model: parsed.model || defaultModel });
+          }
+        } catch {
+          // ignore partial JSON
+        }
+      }
+    }
+  }
+
+  if (buffer.trim().startsWith('data:')) {
+    const dataStr = buffer.trim().replace(/^data:\s*/, '');
+    if (dataStr !== '[DONE]') {
+      try {
+        const parsed = JSON.parse(dataStr);
+        const choice = parsed.choices?.[0];
+        const delta = choice?.delta;
+        const content = delta?.content || '';
+        const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thought || '';
+        if (content || reasoning) {
+          onChunk({ content, reasoning, model: parsed.model || defaultModel });
+        }
+      } catch {}
+    }
+  }
+}
+
+export async function handleFetchModels(
+  provider: ProviderType,
+  apiKey?: string,
+  baseUrl?: string
+): Promise<ModelInfo[]> {
+  // 1. xKiro (Moonshot / Kimi AI) live models
+  if (provider === 'xkiro') {
+    const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY;
+    const endpoint = baseUrl || 'https://api.moonshot.cn/v1';
+
+    if (!key || !key.trim()) {
+      throw new Error(
+        'Please enter your xKiro / Moonshot API key (sk-...) to discover and fetch available models.'
+      );
+    }
+
+    const modelsUrl = `${endpoint.replace(/\/+$/, '')}/models`;
+    const res = await fetch(modelsUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${key.trim()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      let errMessage = res.statusText;
+      try {
+        const errJson = await res.json();
+        errMessage = errJson.error?.message || errJson.message || res.statusText;
+      } catch {}
+      throw new Error(`xKiro API Error (${res.status}): ${errMessage}`);
+    }
+
+    const json = await res.json();
+    const dataList = json.data || json.models || (Array.isArray(json) ? json : []);
+
+    if (!dataList || dataList.length === 0) {
+      throw new Error('xKiro connected, but returned 0 models.');
+    }
+
+    // Map real models from xKiro API - free only
+    return dataList.map((m: any) => {
+      const rawId: string = m.id || m.name || 'kimi-latest';
+      let contextLength = 128000;
+      if (rawId.includes('8k')) contextLength = 8192;
+      else if (rawId.includes('32k')) contextLength = 32768;
+      else if (rawId.includes('128k')) contextLength = 131072;
+      else if (rawId.includes('256k') || rawId.includes('2.6')) contextLength = 262144;
+
+      const isReasoning =
+        rawId.includes('k1.5') ||
+        rawId.includes('r1') ||
+        rawId.includes('reason') ||
+        rawId.includes('thinking');
+
+      let displayName = rawId;
+      if (rawId.startsWith('moonshot-')) {
+        displayName = `Moonshot ${rawId.replace('moonshot-', '').toUpperCase()}`;
+      } else if (rawId.startsWith('kimi-')) {
+        displayName = `Kimi ${rawId.replace('kimi-', '').toUpperCase()}`;
+      }
+
+      return {
+        id: `xkiro-${rawId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        name: displayName,
+        provider: 'xkiro' as ProviderType,
+        description: `Official xKiro model: ${rawId}. Free tier access with ${Math.round(
+          contextLength / 1024
+        )}k context window.`,
+        contextLength,
+        isFree: true,
+        category: isReasoning ? 'reasoning' : 'general',
+        providerModelId: rawId,
+        pricingDescription: 'xKiro Free Tier Access',
+        tags: ['xKiro', 'Free Tier', isReasoning ? 'Reasoning' : 'Chat'],
+        isUserSaved: true,
+      };
+    });
+  }
+
+  // 2. OpenRouter live models (free models only)
+  if (provider === 'openrouter') {
+    const res = await fetch('https://openrouter.ai/api/v1/models');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch OpenRouter models: ${res.statusText}`);
+    }
+    const json = await res.json();
+    const list: ModelInfo[] = [];
+
+    for (const item of json.data || []) {
+      const isFree =
+        item.id.endsWith(':free') ||
+        (item.pricing?.prompt === '0' && item.pricing?.completion === '0');
+
+      // User requested "but free only"
+      if (!isFree) continue;
+
+      list.push({
+        id: `openrouter-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        name: item.name || item.id,
+        provider: 'openrouter',
+        description: item.description || `Context: ${item.context_length || 'unknown'} tokens`,
+        contextLength: item.context_length || 32768,
+        isFree: true,
+        category: item.id.includes('vision')
+          ? 'vision'
+          : item.id.includes('code')
+          ? 'code'
+          : item.id.includes('r1') || item.id.includes('reason')
+          ? 'reasoning'
+          : 'general',
+        providerModelId: item.id,
+        pricingDescription: '100% Free (:free tier)',
+        tags: [
+          'Free',
+          item.id.split('/')[0],
+          `${Math.round((item.context_length || 32000) / 1024)}k Context`,
+        ],
+        isUserSaved: true,
+      });
+    }
+
+    return list;
+  }
+
+  // 3. Gemini live models (free AI studio quota)
+  if (provider === 'gemini') {
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error('Gemini API key is required to fetch models.');
+    }
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`
+    );
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(`Gemini API error: ${errJson.error?.message || res.statusText}`);
+    }
+    const json = await res.json();
+    return (json.models || [])
+      .filter(
+        (m: any) =>
+          m.name.includes('gemini') &&
+          m.supportedGenerationMethods?.includes('generateContent') &&
+          !m.name.includes('vision') // flash & pro are natively multimodal
+      )
+      .map((m: any) => {
+        const cleanId = m.name.replace('models/', '');
+        return {
+          id: `gemini-${cleanId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+          name: m.displayName || cleanId,
+          provider: 'gemini' as ProviderType,
+          description: m.description || 'Google DeepMind multimodal reasoning model',
+          contextLength: m.inputTokenLimit || 1048576,
+          isFree: true,
+          category: 'general' as const,
+          providerModelId: cleanId,
+          pricingDescription: 'Google AI Studio Free Tier (15 RPM)',
+          tags: ['Gemini', 'Google AI', 'Free Tier'],
+          isUserSaved: true,
+        };
+      });
+  }
+
+  // 4. NVIDIA NIM live models
+  if (provider === 'nvidia' && apiKey) {
+    const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return (json.data || []).map((m: any) => ({
+        id: `nvidia-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        name: m.id.split('/').pop()?.toUpperCase() || m.id,
+        provider: 'nvidia' as ProviderType,
+        description: `NVIDIA NIM accelerated model: ${m.id}`,
+        contextLength: 131072,
+        isFree: true,
+        category: m.id.includes('r1') || m.id.includes('nemotron') ? 'reasoning' : 'general',
+        providerModelId: m.id,
+        pricingDescription: 'NVIDIA Free Developer Credits',
+        tags: ['NVIDIA NIM', 'GPU Speed', 'Free Credits'],
+      }));
+    }
+  }
+
+  // 3. Hugging Face live models
+  if (provider === 'huggingface') {
+    const res = await fetch(
+      'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=trending&direction=-1&limit=25'
+    );
+    if (res.ok) {
+      const json = await res.json();
+      return json.map((m: any) => ({
+        id: `hf-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        name: m.id.split('/').pop() || m.id,
+        provider: 'huggingface' as ProviderType,
+        description: `Hugging Face model: ${m.id}. Downloads: ${m.downloads?.toLocaleString() || 0}`,
+        contextLength: 32768,
+        isFree: true,
+        category: m.id.includes('R1') || m.id.includes('Reason') ? 'reasoning' : 'general',
+        providerModelId: m.id,
+        pricingDescription: 'Serverless Inference Free Rate Limits',
+        tags: ['Hugging Face', 'Trending', 'Free Inference'],
+      }));
+    }
+  }
+
+  // 4. Custom endpoint live models
+  if (provider === 'custom' && baseUrl) {
+    const headers: Record<string, string> = {};
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      return (json.data || []).map((m: any) => ({
+        id: `custom-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        name: m.id,
+        provider: 'custom' as ProviderType,
+        description: `Custom model from ${baseUrl}`,
+        contextLength: 32768,
+        isFree: true,
+        category: 'general',
+        providerModelId: m.id,
+        pricingDescription: 'Local / Custom Endpoint',
+        tags: ['Custom', 'Self-Hosted'],
+      }));
+    }
+  }
+
+  // Fallback to default catalog for xKiro, Gemini, etc.
+  return [];
+}

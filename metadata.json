@@ -1,0 +1,6 @@
+{
+  "name": "Agent Pro",
+  "description": "Multi-provider AI Chat & Agent platform integrating Hugging Face, xKiro, OpenRouter, Gemini, NVIDIA, and custom APIs with dynamic model discovery, free tier filtering, and customizable parameters.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
