@@ -1,0 +1,35 @@
+{
+  // Cloudflare Workers configuration for Agent Pro.
+  // Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // Worker name -> https://agentpro.<your-subdomain>.workers.dev (rename freely).
+  "name": "agentpro",
+
+  // Worker entry: handles /api/* and delegates everything else to static assets.
+  "main": "worker/index.ts",
+
+  // nodejs_compat lets the shared server code (and @google/genai) use Node-style
+  // APIs such as process.env; with this compat date, process.env is also
+  // auto-populated with the Worker's vars and secrets.
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Serve the Vite build (dist/) as static assets with SPA fallback, so
+  // client-side routes resolve to index.html on hard refresh / deep links.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  // Logs in the Cloudflare dashboard (Workers Logs).
+  "observability": {
+    "enabled": true
+  }
+
+  // Provider API keys are optional secrets — set them with:
+  //   npx wrangler secret put GEMINI_API_KEY
+  //   npx wrangler secret put OPENROUTER_API_KEY
+  // (see README.md). Users can also configure keys per-provider in the app UI.
+}
