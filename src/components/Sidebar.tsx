@@ -8,6 +8,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { NavTab } from '../types';
+import { UI_VERSION } from '../uiVersion';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -53,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`mobile-navigation order-last md:order-first border-t md:border-t-0 md:border-r border-white/10 flex md:flex-col glass select-none z-30 relative shrink-0 ${
+      className={`mobile-navigation order-last md:order-first border-t md:border-t-0 md:border-r border-violet-400/25 flex md:flex-col glass gradient-sidebar select-none z-30 relative shrink-0 ${
         collapsed ? 'w-full md:w-12' : 'w-full md:w-36'
       }`}
     >
@@ -69,11 +70,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="flex items-center gap-1.5 cursor-pointer group text-left border-none bg-transparent p-0"
           title="Agent Pro"
         >
-          <div className="w-2 h-2 rounded-full bg-cyan-400 neon-glow shrink-0 group-hover:scale-125 transition-transform" />
+          <div className="w-2 h-2 rounded-full gradient-dot shrink-0 group-hover:scale-125 transition-transform" />
           {!collapsed && (
-            <span className="text-xs font-bold tracking-tight text-white flex items-center gap-1">
-              <span>AGENT</span>
-              <span className="text-cyan-400">PRO</span>
+            <span className="text-xs font-bold tracking-tight flex items-center gap-1">
+              <span className="gradient-text">AGENT PRO</span>
             </span>
           )}
         </button>
@@ -108,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'md:gap-2 px-2 py-1.5'
               } ${
                 isActive
-                  ? 'bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 shadow-[0_0_10px_rgba(0,242,255,0.15)] font-semibold'
+                  ? 'gradient-nav-active font-semibold'
                   : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
               }`}
               title={item.label}
@@ -117,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Icon
                 className={`w-3.5 h-3.5 shrink-0 transition-transform ${
-                  isActive ? 'text-cyan-400 neon-text' : 'text-white/60 group-hover:text-white'
+                  isActive ? 'text-violet-200' : 'text-white/60 group-hover:text-white'
                 }`}
               />
 
@@ -157,8 +157,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Open Settings"
           >
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 neon-glow" />
-              <span className="font-mono text-cyan-400">v2.6</span>
+              <span className="w-1.5 h-1.5 rounded-full gradient-dot" />
+              <span className="font-mono text-violet-300">v{UI_VERSION}</span>
             </div>
             <span className="text-white/30 font-mono text-[9px]">Ready</span>
           </div>

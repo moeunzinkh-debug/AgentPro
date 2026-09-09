@@ -125,19 +125,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
-      {/* Ambient radial glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.05)_0%,transparent_50%)] pointer-events-none z-0" />
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden relative">
+      {/* Aurora gradient background */}
+      <div className="aurora-bg z-0" />
+      <div className="aurora-orb aurora-orb-fuchsia w-72 h-72 -top-16 left-1/3 z-0" />
+      <div className="aurora-orb aurora-orb-cyan w-72 h-72 bottom-0 -right-20 z-0" />
 
       {/* Header matching Immersive UI */}
-      <div className="shrink-0 px-4 md:px-6 py-4 md:py-5 border-b border-white/10 glass z-10 flex flex-wrap items-center justify-between gap-3">
+      <div className="shrink-0 px-4 md:px-6 py-4 md:py-5 glass gradient-header z-10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.2)]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-avatar-agent">
             <ListTodo className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-white uppercase tracking-wide">
-              Agent Workflows
+            <h1 className="text-lg font-bold tracking-tight uppercase tracking-wide">
+              <span className="gradient-text">Agent Workflows</span>
             </h1>
             <p className="text-xs text-white/40 mt-0.5">
               Execute structured autonomous workflows using {activeModel.name} ({activeModel.provider}).
@@ -147,7 +149,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
         <div className="flex items-center gap-2">
           <span className="text-[11px] uppercase tracking-wider text-white/40">Target Model:</span>
-          <span className="rounded-lg bg-cyan-500/15 border border-cyan-500/40 px-2.5 py-1 text-xs font-mono font-semibold text-cyan-300">
+          <span className="rounded-lg gradient-pill-active px-2.5 py-1 text-xs font-mono font-semibold text-violet-100">
             {activeModel.name}
           </span>
         </div>
@@ -171,8 +173,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 onClick={() => handleSelectTask(task)}
                 className={`w-full text-left p-3.5 rounded-xl transition-all cursor-pointer ${
                   isSelected
-                    ? 'glass border border-cyan-500/60 accent-border text-cyan-300 shadow-[0_0_14px_rgba(0,242,255,0.14)]'
-                    : 'glass border border-white/10 text-white/70 hover:border-cyan-500/30 hover:text-white'
+                    ? 'gradient-card-soft accent-border text-violet-100 shadow-[0_0_14px_rgba(139,92,246,0.3)]'
+                    : 'glass border border-white/10 text-white/70 hover:border-violet-400/40 hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-2.5 mb-1.5">
@@ -198,7 +200,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         {/* Right column: Execution Workspace */}
         <div className="min-w-0 shrink-0 lg:flex-1 flex flex-col lg:overflow-y-auto p-4 md:p-6 space-y-5 custom-scrollbar">
           {/* Prompt Editor */}
-          <div className="shrink-0 rounded-xl glass border border-white/10 p-4 space-y-3">
+          <div className="shrink-0 rounded-xl gradient-card p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] uppercase tracking-wider font-bold text-white/80 flex items-center gap-2">
                 <Bot className="h-4 w-4 text-cyan-400" />
@@ -227,7 +229,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               <button
                 onClick={handleRunTask}
                 disabled={isExecuting || !taskPrompt.trim()}
-                className="flex items-center gap-2 rounded-lg bg-cyan-500 px-5 py-2 text-xs font-bold text-black hover:bg-cyan-400 disabled:opacity-40 transition-all shadow-[0_0_12px_rgba(0,242,255,0.35)] cursor-pointer"
+                className="flex items-center gap-2 rounded-lg gradient-btn px-5 py-2 text-xs font-bold cursor-pointer"
               >
                 {isExecuting ? (
                   <>
@@ -246,7 +248,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           {/* Execution Progress & Result */}
           {isExecuting && (
-            <div className="shrink-0 rounded-xl glass border border-cyan-500/40 p-4 space-y-3 shadow-[0_0_16px_rgba(0,242,255,0.15)]">
+            <div className="shrink-0 rounded-xl gradient-card-soft p-4 space-y-3 shadow-[0_0_16px_rgba(139,92,246,0.3)]">
               <div className="text-xs font-bold text-cyan-300 flex items-center gap-2 uppercase tracking-wide">
                 <RotateCw className="h-4 w-4 animate-spin text-cyan-400" />
                 Autonomous Plan Execution
@@ -292,7 +294,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           {/* Output Card */}
           {executionResult && (
-            <div className="shrink-0 rounded-xl glass border border-white/10 p-5 space-y-3">
+            <div className="shrink-0 rounded-xl gradient-card p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
                 <div className="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-wide">
                   <CheckCircle2 className="h-4 w-4 text-cyan-400" />

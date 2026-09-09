@@ -173,14 +173,17 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const providerKeys: ProviderType[] = ['gemini', 'openai', 'grok', 'kimi', 'deepseek', 'custom'];
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#07090d] overflow-y-auto overflow-x-hidden custom-scrollbar p-5 md:p-8">
-      <div className="max-w-2xl mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-5 md:p-8 relative">
+      <div className="aurora-bg z-0" />
+      <div className="aurora-orb aurora-orb-violet w-72 h-72 -top-16 -right-16 z-0" />
+      <div className="aurora-orb aurora-orb-cyan w-80 h-80 bottom-0 -left-24 z-0" />
+      <div className="max-w-2xl mx-auto w-full space-y-6 relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-cyan-400" />
-              <span>Add Model</span>
+            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-300" />
+              <span className="gradient-text">Add Model</span>
             </h1>
             <p className="text-xs text-white/50 mt-1">
               Select Gemini, ChatGPT, Grok, Kimi, or DeepSeek — default URLs are provided automatically. Just add your API key!
@@ -222,10 +225,10 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         )}
 
         {/* THE ADD MODEL FORM */}
-        <div className="rounded-2xl border border-cyan-500/30 bg-[#0c1017] p-6 shadow-[0_0_30px_rgba(0,242,255,0.06)] space-y-5">
+        <div className="rounded-2xl gradient-card p-6 shadow-[0_0_30px_rgba(139,92,246,0.2)] space-y-5">
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 neon-glow" />
+              <span className="w-2.5 h-2.5 rounded-full gradient-dot" />
               <span>Select Model Provider</span>
             </h2>
             <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/25 flex items-center gap-1">
@@ -251,7 +254,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                     onClick={() => handleSelectProvider(pKey)}
                     className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-[0_0_15px_rgba(0,242,255,0.25)] ring-1 ring-cyan-400/50'
+                        ? 'gradient-pill-active text-white'
                         : 'bg-black/40 border-white/10 text-white/70 hover:bg-white/5 hover:border-white/20 hover:text-white'
                     }`}
                   >
@@ -397,7 +400,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
             <div className="pt-3">
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-bold text-sm py-3 shadow-[0_0_20px_rgba(0,242,255,0.4)] transition-all cursor-pointer active:scale-[0.99]"
+                className="w-full flex items-center justify-center gap-2 rounded-xl gradient-btn font-bold text-sm py-3 cursor-pointer active:scale-[0.99]"
               >
                 <Check className="h-4 w-4 stroke-[3]" />
                 <span>Used model</span>
@@ -433,7 +436,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                     key={m.id}
                     className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
                       isActive
-                        ? 'bg-cyan-950/30 border-cyan-500/50 shadow-[0_0_20px_rgba(0,242,255,0.15)]'
+                        ? 'gradient-card-soft shadow-[0_0_20px_rgba(139,92,246,0.25)]'
                         : 'bg-white/[0.03] border-white/10 hover:border-white/20'
                     }`}
                   >
@@ -441,7 +444,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span
                           className={`w-2 h-2 rounded-full shrink-0 ${
-                            isActive ? 'bg-cyan-400 neon-glow' : 'bg-white/30'
+                            isActive ? 'gradient-dot' : 'bg-white/30'
                           }`}
                         />
                         <span className="text-sm font-bold text-white min-w-0 [overflow-wrap:anywhere]">
@@ -485,7 +488,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                             setActiveModelId(m.id);
                             showNotification('success', `"${m.name}" set as Used Model!`);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs border border-cyan-500/40 transition-all cursor-pointer flex items-center gap-1.5"
+                          className="px-3 py-1.5 rounded-xl gradient-btn-ghost font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                         >
                           <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                           <span>Used model</span>
@@ -494,7 +497,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => onSelectAndChat(m.id)}
-                          className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs transition-all shadow-[0_0_12px_rgba(0,242,255,0.3)] cursor-pointer flex items-center gap-1.5"
+                          className="px-3 py-1.5 rounded-xl gradient-btn font-bold text-xs cursor-pointer flex items-center gap-1.5"
                         >
                           <MessageSquare className="h-3.5 w-3.5 fill-black" />
                           <span>Chat now</span>

@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig, Plugin} from 'vite';
 import dotenv from 'dotenv';
 import { handleChatRequest, handleChatStreamRequest, handleFetchModels, parseApiErrorMessage } from './src/server/apiRouter';
+import { UI_BUILD_DATE, UI_THEME, UI_VERSION } from './src/uiVersion';
 
 dotenv.config();
 
@@ -66,6 +67,20 @@ function apiServerPlugin(): Plugin {
               }
             }
           });
+          return;
+        }
+
+        // UI release endpoint (mirrors worker/index.ts) — lets the app verify
+        // the served gradient UI matches src/uiVersion.ts in every environment.
+        if ((pathname === '/api/ui-version' || pathname === '/api/health' || pathname === '/api/status') && req.method === 'GET') {
+          const payload =
+            pathname === '/api/ui-version'
+              ? { uiVersion: UI_VERSION, uiTheme: UI_THEME, uiBuild: UI_BUILD_DATE, bundledIn: 'vite dev middleware' }
+              : { status: 'ok', service: 'Agent Pro', worker: 'vite-dev', timestamp: new Date().toISOString(), uiVersion: UI_VERSION, uiTheme: UI_THEME, uiBuild: UI_BUILD_DATE };
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('X-UI-Version', UI_VERSION);
+          res.statusCode = 200;
+          res.end(JSON.stringify(payload));
           return;
         }
 

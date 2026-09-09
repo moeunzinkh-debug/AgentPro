@@ -157,7 +157,7 @@ export const ModelSelectorDropdown: React.FC<ModelSelectorDropdownProps> = ({
 
       {/* DROPDOWN MENU / SELECTION PANEL */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-full rounded-2xl glass border border-cyan-500/40 p-3 shadow-[0_15px_40px_rgba(0,0,0,0.9)] z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 max-h-[26rem] flex flex-col">
+        <div className="absolute left-0 top-full mt-2 w-full rounded-2xl glass gradient-panel-modal border border-violet-400/50 p-3 shadow-[0_15px_40px_rgba(0,0,0,0.9)] z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 max-h-[26rem] flex flex-col">
           {/* Dropdown Header */}
           <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export const ModelSelectorDropdown: React.FC<ModelSelectorDropdownProps> = ({
                       }}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-cyan-500/20 border-cyan-400 shadow-[0_0_12px_rgba(0,242,255,0.2)]'
+                          ? 'gradient-pill-active'
                           : m.isNewest
                           ? 'bg-amber-950/20 border-amber-500/30 hover:bg-amber-900/30 hover:border-amber-400'
                           : 'bg-black/30 border-white/5 hover:bg-white/5 hover:border-white/20'
@@ -310,7 +310,7 @@ export const ModelSelectorDropdown: React.FC<ModelSelectorDropdownProps> = ({
                     }}
                     className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-[0_0_12px_rgba(0,242,255,0.2)]'
+                        ? 'gradient-pill-active text-white'
                         : 'bg-black/30 border-white/5 hover:bg-white/5 hover:border-white/20'
                     }`}
                   >
