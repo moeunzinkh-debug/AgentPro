@@ -414,6 +414,31 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* --- View surface -------------------------------------------------------
+   Every top-level view (chat, tasks, models, settings) must be an opaque,
+   self-contained paint layer. Without this, mobile WebViews keep compositing
+   the previously mounted view underneath (e.g. the Settings theme cards
+   ghosting on top of the Models page) because the new view is transparent.
+   ----------------------------------------------------------------------- */
+.view-surface {
+  position: relative;
+  background-color: #05060f;
+  isolation: isolate;
+  transform: translateZ(0);
+  contain: paint;
+}
+
+/* The scrollable body of a view: its own layer so the animated aurora layer
+   behind it is never re-composited while the content scrolls. */
+.view-scroll {
+  position: relative;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+}
+
 /* Respect users who prefer reduced motion: freeze aurora animation. */
 @media (prefers-reduced-motion: reduce) {
   .aurora-bg {

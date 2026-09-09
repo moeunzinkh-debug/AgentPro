@@ -306,7 +306,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden relative">
+    <div className="view-surface flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden">
       {/* Aurora gradient background — chat viewer canvas */}
       <div className="aurora-bg aurora-bg-strong z-0" />
       <div className="aurora-orb aurora-orb-violet w-72 h-72 -top-20 -left-16 z-0" />

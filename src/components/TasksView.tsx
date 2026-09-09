@@ -125,7 +125,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden relative">
+    <div className="view-surface flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden">
       {/* Aurora gradient background */}
       <div className="aurora-bg z-0" />
       <div className="aurora-orb aurora-orb-fuchsia w-72 h-72 -top-16 left-1/3 z-0" />
