@@ -49,8 +49,32 @@ jobs:
 
       # `npm run deploy` -> `wrangler deploy`; wrangler.jsonc's build.command
       # runs `npm run build` first, so the latest frontend always ships.
+      # Output is teed to a file so the step below can surface the real
+      # wrangler error as job annotations when the deploy fails.
       - name: Deploy
-        run: npm run deploy
+        run: |
+          set -o pipefail
+          npm run deploy 2>&1 | tee "$GITHUB_WORKSPACE/deploy.log"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Report deploy failure
+        if: failure()
+        run: |
+          LOG="$GITHUB_WORKSPACE/deploy.log"
+          echo "::error::Wrangler deploy failed — key error lines follow."
+          if [ -f "$LOG" ]; then
+            MATCHES=$(grep -E '✘|\[ERROR\]|APIError|Authentication|authentication|permission|not authorized|more than one account|CLOUDFLARE_ACCOUNT_ID|exited with|failed with' "$LOG" | tail -8 | cut -c1-170)
+            if [ -n "$MATCHES" ]; then
+              printf '%s\n' "$MATCHES" | while IFS= read -r line; do
+                echo "::error::${line//%/?}"
+              done
+            else
+              tail -6 "$LOG" | cut -c1-170 | while IFS= read -r line; do
+                echo "::error::${line//%/?}"
+              done
+            fi
+          else
+            echo "::error::No deploy log captured; see the Deploy step output in the Actions UI."
+          fi
