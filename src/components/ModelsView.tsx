@@ -15,6 +15,7 @@ import { ModelInfo, ProviderConfig, ProviderType } from '../types';
 import { PROVIDER_PRESETS } from '../data/defaultCatalog';
 import { ModelSelectorDropdown } from './ModelSelectorDropdown';
 import { normalizeBaseUrl } from '../utils/url';
+import { clearAllSavedModels } from '../services/storage';
 
 interface ModelsViewProps {
   models: ModelInfo[];
@@ -157,11 +158,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     if (window.confirm('Are you sure you want to delete all models?')) {
       setModels([]);
       setActiveModelId('');
-      try {
-        localStorage.removeItem('agentpro_saved_models_v1');
-        localStorage.removeItem('agentpro_saved_model_ids');
-        localStorage.removeItem('agentpro_active_model_id');
-      } catch {}
+      clearAllSavedModels();
       showNotification('success', 'All models deleted.');
     }
   };
