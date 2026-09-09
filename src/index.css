@@ -428,6 +428,18 @@ html, body, #root {
   contain: paint;
 }
 
+/* Chat scroll viewport.
+   overflow-anchor: none — Chrome's scroll anchoring otherwise shifts the
+   scroll position on its own while JS re-pins to the bottom during token
+   streaming, which is exactly the "jumping / reply cut off" glitch on
+   mobile WebViews. The app now manages pinning itself (see ChatView).
+   overscroll-behavior — keeps scroll chaining/bounce off the page shell so
+   the header/footer can never get scrolled out of view. */
+.chat-viewport {
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+}
+
 /* The scrollable body of a view: its own layer so the animated aurora layer
    behind it is never re-composited while the content scrolls. */
 .view-scroll {

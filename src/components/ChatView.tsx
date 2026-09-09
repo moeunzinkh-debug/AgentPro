@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowDown,
@@ -79,10 +79,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState<Record<string, boolean>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatViewportRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
+  const messagesContentRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  // --- Stick-to-bottom streaming scroll ---
+  // While the user stays at the bottom we "stick" the viewport to the newest
+  // content. The flag lives in a ref (not state) so token-by-token updates
+  // never re-trigger scroll effects in a loop.
+  const stickToBottomRef = useRef(true);
+  // Until this timestamp, scroll events are considered self-inflicted by our
+  // own programmatic pin and must not change stick state.
+  const programmaticScrollUntilRef = useRef(0);
+  const pinFrameRef = useRef(0);
+  // True while a wheel/touch scroll gesture is in progress: pins are paused.
+  const userInteractingRef = useRef(false);
+  const interactEndTimerRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -103,52 +114,131 @@ export const ChatView: React.FC<ChatViewProps> = ({
     };
   }, [showAttachMenu]);
 
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior });
-    } else if (chatViewportRef.current) {
-      chatViewportRef.current.scrollTo({
-        top: chatViewportRef.current.scrollHeight,
-        behavior,
-      });
+  const NEAR_BOTTOM_PX = 120;
+
+  const isNearBottom = (el: HTMLElement) =>
+    el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+
+  const syncBottomUi = () => {
+    const el = chatViewportRef.current;
+    if (!el) return;
+    const overflows = el.scrollHeight - el.clientHeight > 24;
+    setShowScrollBottom(overflows && !isNearBottom(el));
+  };
+
+  // Pin the viewport to the bottom. This is the heart of the fix: we used to
+  // call scrollIntoView({ behavior: 'smooth' }) on *every* streamed token,
+  // which restarted the smooth animation constantly and made the view jump
+  // around on mobile. Worse, the mid-animation positions were misread as
+  // "user scrolled up", permanently disabling auto-follow so replies ended up
+  // cut off below the visible area.
+  const pinToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const el = chatViewportRef.current;
+    if (!el) return;
+    programmaticScrollUntilRef.current =
+      Date.now() + (behavior === 'smooth' ? 750 : 150);
+    if (behavior === 'smooth') {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      // Re-sync the floating button once the animation settles.
+      window.setTimeout(syncBottomUi, 820);
+    } else {
+      el.scrollTop = el.scrollHeight;
+      syncBottomUi();
+    }
+  };
+
+  // Coalesce every pin request into a single write per animation frame.
+  const schedulePinToBottom = () => {
+    // While the user is mid gesture (wheel/touch drag), never yank the
+    // viewport — their scroll delta would be erased by the pin before the
+    // scroll event can even be measured.
+    if (userInteractingRef.current) return;
+    if (pinFrameRef.current) return;
+    pinFrameRef.current = window.requestAnimationFrame(() => {
+      pinFrameRef.current = 0;
+      if (stickToBottomRef.current && !userInteractingRef.current) pinToBottom('auto');
+    });
+  };
+
+  // A wheel event has no reliable "end" signal, so treat the gesture as over
+  // after a short idle; touch has touchend. When the gesture ends we decide
+  // from the settled position whether auto-follow resumes (stick) or stays
+  // paused for reading.
+  const endUserInteracting = () => {
+    window.clearTimeout(interactEndTimerRef.current);
+    userInteractingRef.current = false;
+    const el = chatViewportRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
+    syncBottomUi();
+  };
+
+  const markUserInteracting = (isWheel: boolean) => {
+    userInteractingRef.current = true;
+    // Stop treating pending programmatic movement as an intent guard.
+    programmaticScrollUntilRef.current = 0;
+    window.clearTimeout(interactEndTimerRef.current);
+    if (isWheel) {
+      interactEndTimerRef.current = window.setTimeout(endUserInteracting, 200);
     }
   };
 
   const handleScroll = () => {
+    // Ignore scroll events caused by our own pinning — they are not user
+    // intent and must not toggle the stick-to-bottom state.
+    if (Date.now() < programmaticScrollUntilRef.current) return;
+    if (userInteractingRef.current) return;
     const el = chatViewportRef.current;
     if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // When distance from bottom is greater than 80px, user has scrolled up to read earlier text
-    const isNearBottom = distanceFromBottom < 80;
-
-    setShowScrollBottom(!isNearBottom);
-    if (isNearBottom) {
-      // Re-enable auto-scroll when user scrolls back to bottom
-      setAutoScroll(true);
-    } else {
-      // Pause auto-scroll while user is reading/scrolling
-      setAutoScroll(false);
-    }
+    stickToBottomRef.current = isNearBottom(el);
+    syncBottomUi();
   };
 
   const handleScrollToBottomClick = () => {
-    setAutoScroll(true);
+    stickToBottomRef.current = true;
     setShowScrollBottom(false);
-    scrollToBottom('smooth');
+    // While tokens are still arriving, pin instantly: a smooth animation
+    // would fight the per-frame auto-pins and could settle a few pixels off.
+    pinToBottom(isGenerating ? 'auto' : 'smooth');
   };
 
-  // Auto scroll during generation or message arrival ONLY if user is at bottom (autoScroll is true)
-  useEffect(() => {
-    if (autoScroll) {
-      scrollToBottom('smooth');
+  // Follow streamed content frame-by-frame while the user is at the bottom.
+  useLayoutEffect(() => {
+    if (stickToBottomRef.current) {
+      schedulePinToBottom();
     }
-  }, [conversation.messages, isGenerating, autoScroll]);
+  }, [conversation.messages, isGenerating]);
 
-  // When switching conversation, jump to bottom
+  const hasMessages = conversation.messages.length > 0;
+
+  // Re-pin whenever an async reflow lands (markdown/code block relayout,
+  // images finishing loading, reasoning block appearing, keyboard show/hide).
+  // Without this the tail of the reply ends up hidden behind the input bar.
   useEffect(() => {
-    setAutoScroll(true);
+    const viewport = chatViewportRef.current;
+    const content = messagesContentRef.current;
+    if (!viewport || !content) return;
+    const observer = new ResizeObserver(() => {
+      // Don't fight a running smooth scroll animation.
+      if (Date.now() < programmaticScrollUntilRef.current) return;
+      if (stickToBottomRef.current) {
+        schedulePinToBottom();
+      } else {
+        syncBottomUi();
+      }
+    });
+    observer.observe(content);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [conversation.id, hasMessages]);
+
+  // When switching conversation, jump straight to the bottom.
+  useEffect(() => {
+    stickToBottomRef.current = true;
     setShowScrollBottom(false);
-    scrollToBottom('auto');
+    // One frame later so the new conversation's content is measurable.
+    const raf = window.requestAnimationFrame(() => pinToBottom('auto'));
+    return () => window.cancelAnimationFrame(raf);
   }, [conversation.id]);
 
   // Adjust textarea height
@@ -196,10 +286,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setShowAttachMenu(false);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Sending a new message re-enables auto-scroll and scrolls down
-    setAutoScroll(true);
+    // Sending a new message re-sticks the view to the bottom.
+    stickToBottomRef.current = true;
     setShowScrollBottom(false);
-    scrollToBottom('smooth');
+    schedulePinToBottom();
 
     await onSendMessage(
       text,
@@ -496,7 +586,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div
           ref={chatViewportRef}
           onScroll={handleScroll}
-          className="flex-1 min-h-0 min-w-0 overflow-y-auto px-3 md:px-8 py-6 space-y-6 relative z-10 custom-scrollbar"
+          onWheel={() => markUserInteracting(true)}
+          onTouchStart={() => markUserInteracting(false)}
+          onTouchEnd={endUserInteracting}
+          onTouchCancel={endUserInteracting}
+          className="chat-viewport flex-1 min-h-0 min-w-0 overflow-y-auto px-3 md:px-8 py-6 space-y-6 relative z-10 custom-scrollbar"
         >
         {conversation.messages.length === 0 ? (
           /* Empty state */
@@ -558,9 +652,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <button
                       key={idx}
                       onClick={() => {
-                        setAutoScroll(true);
+                        stickToBottomRef.current = true;
                         setShowScrollBottom(false);
-                        scrollToBottom('smooth');
+                        schedulePinToBottom();
                         onSendMessage(prompt);
                       }}
                       className="text-left p-3.5 rounded-xl gradient-card-soft hover:border-violet-400/60 text-xs text-white/80 hover:text-white transition-all group flex items-center justify-between"
@@ -574,7 +668,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             )}
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div ref={messagesContentRef} className="max-w-3xl mx-auto space-y-6">
             {conversation.messages.map((msg, idx) => {
               const isUser = msg.role === 'user';
               const isReasoningExpanded = expandedReasoning[msg.id] ?? false;
@@ -746,8 +840,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                                   .reverse()
                                   .find((m) => m.role === 'user');
                                 if (lastUserMsg) {
-                                  setAutoScroll(true);
-                                  scrollToBottom('smooth');
+                                  stickToBottomRef.current = true;
+
+                                  schedulePinToBottom();
                                   onSendMessage(
                                     lastUserMsg.content,
                                     lastUserMsg.imageUrls,
@@ -775,8 +870,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                                     .find((m) => m.role === 'user');
                                   if (lastUserMsg) {
                                     setTimeout(() => {
-                                      setAutoScroll(true);
-                                      scrollToBottom('smooth');
+                                      stickToBottomRef.current = true;
+
+                                      schedulePinToBottom();
                                       onSendMessage(
                                         lastUserMsg.content,
                                         lastUserMsg.imageUrls,
@@ -829,7 +925,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </div>
               )}
 
-            <div ref={messagesEndRef} />
+            <div aria-hidden="true" />
           </div>
         )}
         </div>

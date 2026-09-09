@@ -104,8 +104,18 @@ export default function App() {
     saveSavedModelIds(savedModelIds);
   }, [savedModelIds]);
 
+  // Persist conversations with a short debounce: while streaming, the
+  // conversations array changes every frame, and JSON.stringify-ing the
+  // entire history to localStorage on each change stalls the mobile UI.
+  // pagehide forces a final flush so nothing is lost if the tab closes early.
   useEffect(() => {
-    saveConversations(conversations);
+    const t = window.setTimeout(() => saveConversations(conversations), 500);
+    const flush = () => saveConversations(conversations);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('pagehide', flush);
+    };
   }, [conversations]);
 
   useEffect(() => {
@@ -501,6 +511,39 @@ export default function App() {
         // Progressive streaming for other providers when stream is enabled
         let streamContent = '';
         let streamReasoning = '';
+        let lastChunkModel = '';
+        let streamRaf = 0;
+
+        // Apply the accumulated stream buffer to state. Token chunks from the
+        // SSE reader are coalesced into ONE update per animation frame —
+        // updating state (and re-parsing markdown, re-scrolling, persisting)
+        // for every single token is what made the UI jank and jump on mobile.
+        const flushStreamedContent = () => {
+          streamRaf = 0;
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id === currentConvId) {
+                return {
+                  ...c,
+                  updatedAt: Date.now(),
+                  messages: c.messages.map((m) => {
+                    if (m.id === assistantMsgId) {
+                      return {
+                        ...m,
+                        content: streamContent,
+                        reasoning: streamReasoning || undefined,
+                        modelUsed: lastChunkModel || activeModel.name,
+                        status: 'streaming',
+                      };
+                    }
+                    return m;
+                  }),
+                };
+              }
+              return c;
+            })
+          );
+        };
 
         const response = await sendChatMessageStream(
           {
@@ -515,32 +558,20 @@ export default function App() {
           (chunk) => {
             if (chunk.content) streamContent += chunk.content;
             if (chunk.reasoning) streamReasoning += chunk.reasoning;
+            if (chunk.model) lastChunkModel = chunk.model;
 
-            setConversations((prev) =>
-              prev.map((c) => {
-                if (c.id === currentConvId) {
-                  return {
-                    ...c,
-                    updatedAt: Date.now(),
-                    messages: c.messages.map((m) => {
-                      if (m.id === assistantMsgId) {
-                        return {
-                          ...m,
-                          content: streamContent,
-                          reasoning: streamReasoning || undefined,
-                          modelUsed: chunk.model || activeModel.name,
-                          status: 'streaming',
-                        };
-                      }
-                      return m;
-                    }),
-                  };
-                }
-                return c;
-              })
-            );
+            if (!streamRaf) {
+              streamRaf = window.requestAnimationFrame(flushStreamedContent);
+            }
           }
         );
+
+        // The final "complete" update below carries the full buffer, so any
+        // still-scheduled frame flush is redundant — cancel it.
+        if (streamRaf) {
+          window.cancelAnimationFrame(streamRaf);
+          streamRaf = 0;
+        }
 
         // Mark completed
         setConversations((prev) =>
