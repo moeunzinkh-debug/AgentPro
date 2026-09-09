@@ -64,6 +64,11 @@ jobs:
         id: wrangler
         run: |
           set -o pipefail
+          # Mobile paste often adds a trailing newline/space that makes
+          # Cloudflare return Authentication error on /workers/services/*.
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '\r\n\t ')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -d '\r\n\t ')"
+          echo "Using API token length ${#CLOUDFLARE_API_TOKEN}, account id length ${#CLOUDFLARE_ACCOUNT_ID}."
           npm run deploy 2>&1 | tee "$GITHUB_WORKSPACE/deploy.log"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
