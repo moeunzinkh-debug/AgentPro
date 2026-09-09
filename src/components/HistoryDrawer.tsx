@@ -31,9 +31,9 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/80">
-      <div className="w-full max-w-sm h-full glass-panel border-l border-white/10 text-[#e2e2e7] flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-sm h-full glass-panel gradient-panel-modal border-l border-violet-400/30 text-[#e2e2e7] flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
         {/* Header */}
-        <div className="p-4 border-b border-white/10 flex items-center justify-between glass">
+        <div className="p-4 border-b border-violet-400/25 flex items-center justify-between gradient-header">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-cyan-400" />
             <h2 className="text-xs uppercase font-bold tracking-wider text-white">Chat History</h2>
@@ -53,7 +53,7 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
               onNewChat();
               onClose();
             }}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-500 py-2.5 text-xs font-bold text-black hover:bg-cyan-400 transition-all shadow-[0_0_12px_rgba(0,242,255,0.35)] cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl gradient-btn py-2.5 text-xs font-bold cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
             <span>New Chat</span>
@@ -94,7 +94,7 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                   }}
                   className={`group flex items-center justify-between p-2.5 rounded-lg text-xs cursor-pointer transition-all ${
                     isSelected
-                      ? 'border border-cyan-500/50 bg-cyan-500/10 text-cyan-300 accent-border shadow-[0_0_8px_rgba(0,242,255,0.1)]'
+                      ? 'gradient-pill-active text-violet-100 accent-border'
                       : 'hover:bg-white/5 text-white/70 border border-transparent hover:text-white'
                   }`}
                 >

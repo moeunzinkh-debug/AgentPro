@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --accent: #00f2ff;
-  --bg: #050507;
+  --accent: #22d3ee;
+  --accent-violet: #8b5cf6;
+  --accent-fuchsia: #e879f9;
+  --accent-blue: #3b82f6;
+  --accent-emerald: #34d399;
+  --bg: #05060f;
   --surface: rgba(255, 255, 255, 0.05);
   --border: rgba(255, 255, 255, 0.1);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -15,58 +19,306 @@ body {
   margin: 0;
 }
 
-/* Immersive Gradient Surfaces.
-   The UI uses opaque gradients instead of glassmorphism: backdrop-filter is
-   never used because cheap mobile WebViews repaint blur layers incorrectly
-   (ghost panels / glitch bands). */
+/* ==========================================================================
+   AURORA GRADIENT UI — opaque gradients everywhere (no glassmorphism).
+   The whole app (chat viewer, sidebar, models, tasks, settings, modals)
+   sits on an animated aurora mesh gradient. backdrop-filter is NEVER used
+   because cheap mobile WebViews repaint blur layers incorrectly
+   (ghost panels / glitch bands). Soft glows are pure radial-gradients.
+   ========================================================================== */
+
+/* --- Opaque gradient panels (kept .glass names for compatibility) --- */
 .glass {
-  background: linear-gradient(150deg, #141b26 0%, #0d1219 55%, #0a0e14 100%);
+  background: linear-gradient(150deg, #171226 0%, #0e1626 48%, #0a0e18 100%);
   border: 1px solid var(--border);
 }
 
 .glass-panel {
-  background: linear-gradient(160deg, #10151c 0%, #0a0d12 100%);
+  background: linear-gradient(160deg, #151128 0%, #0c1220 55%, #090c15 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Hard guard: this is a gradient UI — never allow backdrop blur. */
 .glass,
 .glass-panel,
+.aurora-bg,
+.aurora-orb,
 [class*='backdrop-blur'] {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-/* Theme root gradients */
+/* --- Aurora mesh background layer (rendered behind content) --- */
+.aurora-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: #05060f;
+  background-image:
+    radial-gradient(52rem 30rem at 12% -8%, rgba(124, 58, 237, 0.28) 0%, transparent 60%),
+    radial-gradient(46rem 28rem at 88% -4%, rgba(34, 211, 238, 0.22) 0%, transparent 60%),
+    radial-gradient(40rem 30rem at 50% 110%, rgba(217, 70, 239, 0.16) 0%, transparent 62%),
+    radial-gradient(30rem 22rem at 96% 78%, rgba(59, 130, 246, 0.16) 0%, transparent 60%),
+    linear-gradient(180deg, #0a0a1c 0%, #060614 52%, #04040c 100%);
+  background-size: 120% 120%, 120% 120%, 120% 120%, 120% 120%, 100% 100%;
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+}
+
+.aurora-bg-strong {
+  background-image:
+    radial-gradient(52rem 30rem at 12% -8%, rgba(124, 58, 237, 0.38) 0%, transparent 60%),
+    radial-gradient(46rem 28rem at 88% -4%, rgba(34, 211, 238, 0.3) 0%, transparent 60%),
+    radial-gradient(40rem 30rem at 50% 110%, rgba(217, 70, 239, 0.24) 0%, transparent 62%),
+    radial-gradient(30rem 22rem at 96% 78%, rgba(59, 130, 246, 0.22) 0%, transparent 60%),
+    linear-gradient(180deg, #0c0a20 0%, #070616 52%, #04040c 100%);
+}
+
+/* Floating gradient orbs (pure radial gradients — no blur filters) */
+.aurora-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.aurora-orb-violet {
+  background-image: radial-gradient(circle, rgba(139, 92, 246, 0.35) 0%, rgba(139, 92, 246, 0) 70%);
+}
+
+.aurora-orb-cyan {
+  background-image: radial-gradient(circle, rgba(34, 211, 238, 0.3) 0%, rgba(34, 211, 238, 0) 70%);
+}
+
+.aurora-orb-fuchsia {
+  background-image: radial-gradient(circle, rgba(232, 121, 249, 0.28) 0%, rgba(232, 121, 249, 0) 70%);
+}
+
+@keyframes aurora-drift {
+  0% { background-position: 0% 0%, 100% 0%, 50% 100%, 100% 80%, 0 0; }
+  50% { background-position: 4% 3%, 96% 4%, 54% 96%, 95% 84%, 0 0; }
+  100% { background-position: 0% 6%, 100% 2%, 46% 100%, 100% 76%, 0 0; }
+}
+
+/* --- Theme root gradients --- */
+.theme-immersive {
+  background-image:
+    radial-gradient(circle at 18% -10%, rgba(124, 58, 237, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 82% -10%, rgba(34, 211, 238, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, #0b0a1e 0%, #070614 55%, #04040c 100%);
+}
+
 .theme-dark-emerald {
   background-image:
-    radial-gradient(circle at 50% -10%, rgba(0, 209, 143, 0.08) 0%, transparent 55%),
-    linear-gradient(180deg, #0a1013 0%, #080c0f 55%, #06090b 100%);
+    radial-gradient(circle at 50% -10%, rgba(0, 209, 143, 0.14) 0%, transparent 55%),
+    radial-gradient(circle at 85% 0%, rgba(34, 211, 238, 0.1) 0%, transparent 50%),
+    linear-gradient(180deg, #0a1410 0%, #080c0f 55%, #06090b 100%);
 }
 
 .theme-dark-slate {
   background-image:
-    radial-gradient(circle at 50% -10%, rgba(56, 189, 248, 0.08) 0%, transparent 55%),
-    linear-gradient(180deg, #111a2b 0%, #0b0f17 55%, #080b11 100%);
+    radial-gradient(circle at 20% -10%, rgba(139, 92, 246, 0.16) 0%, transparent 55%),
+    radial-gradient(circle at 80% -10%, rgba(56, 189, 248, 0.14) 0%, transparent 55%),
+    linear-gradient(180deg, #131428 0%, #0b0f17 55%, #080b11 100%);
 }
 
 .theme-midnight {
   background-image:
-    radial-gradient(circle at 50% -10%, rgba(37, 99, 235, 0.1) 0%, transparent 55%),
+    radial-gradient(circle at 50% -10%, rgba(37, 99, 235, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 90% 10%, rgba(168, 85, 247, 0.14) 0%, transparent 50%),
     linear-gradient(180deg, #0a1128 0%, #050a1a 55%, #030712 100%);
 }
 
 .theme-light {
-  background-image: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
+  background-image:
+    radial-gradient(circle at 15% -10%, rgba(139, 92, 246, 0.12) 0%, transparent 55%),
+    radial-gradient(circle at 85% -10%, rgba(34, 211, 238, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
 }
 
-/* Neon Glows */
+/* --- Gradient surfaces for headers / sidebar / footers --- */
+.gradient-header {
+  background: linear-gradient(120deg, #1b1440 0%, #101a38 45%, #0a1428 100%) !important;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+.gradient-sidebar {
+  background: linear-gradient(180deg, #150f33 0%, #0d1330 45%, #070a1a 100%) !important;
+}
+
+.gradient-footer {
+  background: linear-gradient(120deg, #14102e 0%, #0d1530 50%, #0a0f22 100%) !important;
+  border-top: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+.gradient-card {
+  background: linear-gradient(155deg, #1a1440 0%, #101a38 55%, #0a0e1e 100%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.gradient-card-soft {
+  background: linear-gradient(155deg, rgba(139, 92, 246, 0.14) 0%, rgba(34, 211, 238, 0.08) 55%, rgba(10, 14, 30, 0.6) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+}
+
+.gradient-panel-modal {
+  background: linear-gradient(160deg, #1c1545 0%, #101a3a 50%, #0a0d1e 100%) !important;
+}
+
+/* --- Chat viewer gradient bubbles --- */
+.chat-bubble-user {
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 45%, #2563eb 100%);
+  border: 1px solid rgba(196, 181, 253, 0.55);
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.chat-bubble-assistant {
+  background: linear-gradient(160deg, #1c1740 0%, #121a36 55%, #0b0f22 100%);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  color: #e2e2e7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.chat-reasoning-gradient {
+  background: linear-gradient(150deg, rgba(139, 92, 246, 0.16) 0%, rgba(34, 211, 238, 0.1) 60%, rgba(10, 14, 30, 0.7) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.chat-error-gradient {
+  background: linear-gradient(150deg, rgba(244, 63, 94, 0.16) 0%, rgba(124, 58, 237, 0.1) 100%);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+/* --- Gradient avatars --- */
+.gradient-avatar-agent {
+  background: linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%);
+  border: 1px solid rgba(165, 243, 252, 0.5);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.5);
+}
+
+.gradient-avatar-user {
+  background: linear-gradient(135deg, #db2777 0%, #7c3aed 100%);
+  border: 1px solid rgba(249, 168, 212, 0.45);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(219, 39, 119, 0.4);
+}
+
+.gradient-dot {
+  background: linear-gradient(135deg, #22d3ee 0%, #8b5cf6 55%, #e879f9 100%);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+}
+
+/* --- Gradient buttons --- */
+.gradient-btn {
+  background: linear-gradient(120deg, #22d3ee 0%, #818cf8 50%, #c026d3 100%);
+  color: #05060f;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.gradient-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 0 26px rgba(139, 92, 246, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.gradient-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.gradient-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gradient-btn-ghost {
+  background: linear-gradient(150deg, rgba(139, 92, 246, 0.22) 0%, rgba(34, 211, 238, 0.12) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #ddd6fe;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gradient-btn-ghost:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
+}
+
+/* --- Gradient text --- */
+.gradient-text {
+  background: linear-gradient(100deg, #67e8f9 0%, #a78bfa 45%, #f0abfc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(100deg, #fcd34d 0%, #fb7185 55%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- Gradient input frame (1px gradient border effect, opaque) --- */
+.gradient-input-frame {
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.65), rgba(34, 211, 238, 0.5), rgba(217, 70, 239, 0.55));
+  padding: 1px;
+  border-radius: 0.9rem;
+  box-shadow: 0 0 22px rgba(139, 92, 246, 0.3);
+}
+
+.gradient-input-frame:focus-within {
+  background: linear-gradient(120deg, #8b5cf6, #22d3ee, #e879f9);
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.55);
+}
+
+.gradient-input-inner {
+  background: linear-gradient(180deg, #141130 0%, #0c1024 100%);
+  border-radius: 0.85rem;
+}
+
+/* --- Gradient nav (sidebar) --- */
+.gradient-nav-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35) 0%, rgba(34, 211, 238, 0.22) 100%) !important;
+  border: 1px solid rgba(167, 139, 250, 0.6) !important;
+  color: #ede9fe !important;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* --- Gradient code blocks --- */
+.gradient-code {
+  background: linear-gradient(165deg, #151032 0%, #0b0f24 60%, #070a18 100%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.gradient-code-header {
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.25) 0%, rgba(34, 211, 238, 0.14) 100%);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+/* --- Gradient dividers / pills --- */
+.gradient-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.6), rgba(34, 211, 238, 0.6), transparent);
+}
+
+.gradient-pill-active {
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.4) 0%, rgba(34, 211, 238, 0.28) 100%);
+  border: 1px solid rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.35);
+}
+
+/* --- Neon Glows (kept + violet variants) --- */
 .neon-glow {
   box-shadow: 0 0 12px rgba(0, 242, 255, 0.5);
 }
 
 .neon-glow-sm {
   box-shadow: 0 0 6px rgba(0, 242, 255, 0.35);
+}
+
+.neon-glow-violet {
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.6);
 }
 
 .neon-text {
@@ -79,13 +331,58 @@ body {
 
 /* Radial Ambient Glow */
 .ambient-radial-glow {
-  background-image: radial-gradient(circle at 50% 0%, rgba(0, 242, 255, 0.06) 0%, transparent 50%);
+  background-image: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.14) 0%, transparent 50%);
 }
 
-/* Custom delicate scrollbar */
+/* --- Entrance animations --- */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
+}
+
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-message-in {
+  animation: message-in 0.28s ease-out both;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(34, 211, 238, 0.6); }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+
+/* Streaming caret */
+.stream-caret {
+  display: inline-block;
+  width: 0.5rem;
+  height: 1rem;
+  margin-left: 0.25rem;
+  transform: translateY(0.15rem);
+  border-radius: 0.15rem;
+  background: linear-gradient(180deg, #22d3ee, #a78bfa);
+  animation: caret-blink 0.9s ease-in-out infinite;
+}
+
+@keyframes caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* Custom gradient scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -93,12 +390,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: linear-gradient(180deg, #8b5cf6, #22d3ee);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 242, 255, 0.3);
+  background: linear-gradient(180deg, #a78bfa, #67e8f9);
 }
 
 /* Let inner panels scroll instead of growing beyond the mobile viewport. */
@@ -115,4 +412,16 @@ html, body, #root {
 
 .mobile-navigation {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Respect users who prefer reduced motion: freeze aurora animation. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-bg {
+    animation: none;
+  }
+  .animate-message-in,
+  .animate-fade-in,
+  .animate-glow-pulse {
+    animation: none;
+  }
 }

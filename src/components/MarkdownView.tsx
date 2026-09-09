@@ -61,7 +61,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, isStreaming
                 language={block.language || 'text'}
               />
               {isStreaming && isLastBlock && (
-                <span className="inline-block w-2 h-4 bg-cyan-400 ml-1 translate-y-0.5 animate-pulse rounded-sm" />
+                <span className="stream-caret" />
               )}
             </div>
           );
@@ -70,7 +70,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, isStreaming
           <div key={idx} className="inline">
             <TextBlock text={block.content} />
             {isStreaming && isLastBlock && (
-              <span className="inline-block w-2 h-4 bg-cyan-400 ml-1 translate-y-0.5 animate-pulse rounded-sm" />
+              <span className="stream-caret" />
             )}
           </div>
         );
@@ -89,8 +89,8 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, languag
   };
 
   return (
-    <div className="my-3 overflow-hidden rounded-xl border border-white/10 bg-[#070b0e] text-slate-200 shadow-xl">
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-400 font-mono">
+    <div className="my-3 overflow-hidden rounded-xl gradient-code text-slate-200">
+      <div className="flex items-center justify-between gradient-code-header px-4 py-2 text-xs text-slate-400 font-mono">
         <div className="flex items-center gap-2">
           <Terminal className="h-3.5 w-3.5 text-emerald-400" />
           <span className="font-semibold text-slate-300 uppercase tracking-wider">{language}</span>

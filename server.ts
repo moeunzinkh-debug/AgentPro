@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { handleChatRequest, handleChatStreamRequest, handleFetchModels, parseApiErrorMessage } from './src/server/apiRouter.ts';
+import { UI_BUILD_DATE, UI_THEME, UI_VERSION } from './src/uiVersion.ts';
 
 dotenv.config();
 

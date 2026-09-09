@@ -306,12 +306,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
-      {/* Immersive Radial Cyan Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.06)_0%,transparent_50%)] pointer-events-none z-0" />
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 text-[#e2e2e7] overflow-hidden relative">
+      {/* Aurora gradient background — chat viewer canvas */}
+      <div className="aurora-bg aurora-bg-strong z-0" />
+      <div className="aurora-orb aurora-orb-violet w-72 h-72 -top-20 -left-16 z-0" />
+      <div className="aurora-orb aurora-orb-cyan w-80 h-80 top-1/3 -right-24 z-0" />
+      <div className="aurora-orb aurora-orb-fuchsia w-96 h-96 -bottom-32 left-1/4 z-0" />
 
       {/* Top Header matching Immersive UI */}
-      <header className="shrink-0 min-h-16 border-b border-white/10 px-3 md:px-6 xl:px-8 py-3 flex items-center justify-between gap-2 glass z-20">
+      <header className="shrink-0 min-h-16 px-3 md:px-6 xl:px-8 py-3 flex items-center justify-between gap-2 glass gradient-header z-20">
         <div className="flex flex-col sm:flex-row sm:items-center min-w-0 flex-1 gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <span className="hidden xl:inline text-xs uppercase tracking-widest text-white/40">Current Session:</span>
@@ -365,7 +368,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   className="fixed inset-0 z-30"
                   onClick={() => setShowModelDropdown(false)}
                 />
-                <div className="absolute left-0 top-full mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-2xl glass border border-cyan-500/30 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[min(30rem,50dvh)] overflow-y-auto custom-scrollbar">
+                <div className="absolute left-0 top-full mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-2xl glass gradient-panel-modal border border-violet-400/40 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[min(30rem,50dvh)] overflow-y-auto custom-scrollbar">
                   {/* Dropdown Header */}
                   <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/10 mb-2.5">
                     <div className="text-[10px] uppercase tracking-widest text-white/60 font-bold">
@@ -498,12 +501,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
         {conversation.messages.length === 0 ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center min-h-full text-center px-1 sm:px-4 py-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 mb-4 shadow-[0_0_20px_rgba(0,242,255,0.25)]">
-              <MessageSquare className="h-8 w-8 neon-text" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl gradient-avatar-agent mb-4 animate-glow-pulse">
+              <MessageSquare className="h-8 w-8 text-white" />
             </div>
 
-            <h2 className="text-2xl font-bold text-white tracking-tight flex flex-wrap justify-center items-center gap-2">
-              <span>AI Chat</span>
+            <h2 className="text-2xl font-bold tracking-tight flex flex-wrap justify-center items-center gap-2">
+              <span className="gradient-text">AI Chat</span>
               <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-mono">
                 {activeModel.id === 'unselected' ? 'No Model Selected' : activeModel.name}
               </span>
@@ -560,7 +563,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         scrollToBottom('smooth');
                         onSendMessage(prompt);
                       }}
-                      className="text-left p-3.5 rounded-xl glass hover:border-cyan-500/50 hover:bg-white/10 text-xs text-white/80 hover:text-white transition-all group flex items-center justify-between"
+                      className="text-left p-3.5 rounded-xl gradient-card-soft hover:border-violet-400/60 text-xs text-white/80 hover:text-white transition-all group flex items-center justify-between"
                     >
                       <span className="truncate pr-2">{prompt}</span>
                       <ArrowRight className="h-3.5 w-3.5 text-white/30 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -579,7 +582,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               return (
                 <div
                   key={msg.id}
-                  className={`flex gap-3.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                  className={`flex gap-3.5 animate-message-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                 >
                   {/* Avatar matching Immersive UI: A for Agent, U for User */}
                   {!isUser ? (
@@ -587,7 +590,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       A
                     </div>
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white/80 text-xs font-bold shrink-0">
+                    <div className="w-8 h-8 rounded-lg gradient-avatar-user flex items-center justify-center text-xs font-bold shrink-0">
                       U
                     </div>
                   )}
@@ -607,7 +610,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                     {/* Reasoning block if available */}
                     {!isUser && msg.reasoning && (
-                      <div className="w-full mb-3 rounded-xl glass border border-white/10 p-3 text-xs">
+                      <div className="w-full mb-3 rounded-xl chat-reasoning-gradient p-3 text-xs">
                         <button
                           onClick={() => toggleReasoning(msg.id)}
                           className="flex items-center justify-between w-full text-white/60 hover:text-white transition-colors"
@@ -636,8 +639,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <div
                       className={`p-4 rounded-2xl text-sm leading-relaxed ${
                         isUser
-                          ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-50 rounded-tr-none shadow-md'
-                          : 'glass border border-white/10 text-[#e2e2e7] rounded-tl-none shadow-md'
+                          ? 'chat-bubble-user rounded-tr-none'
+                          : 'chat-bubble-assistant rounded-tl-none'
                       }`}
                     >
                       {/* Attached images */}
@@ -719,7 +722,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                       {/* Error banner & Recovery Actions */}
                       {msg.errorMsg && (
-                        <div className="mt-3 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs">
+                        <div className="mt-3 p-3.5 rounded-xl chat-error-gradient text-xs">
                           <div className="flex items-start gap-2.5 text-rose-300">
                             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-400" />
                             <div className="flex-1 min-w-0">
@@ -836,7 +839,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <div className="absolute bottom-4 right-6 md:right-8 z-30 pointer-events-auto">
             <button
               onClick={handleScrollToBottomClick}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs shadow-[0_0_20px_rgba(0,242,255,0.45)] border border-cyan-200 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full gradient-btn font-bold text-xs hover:scale-105 active:scale-95 cursor-pointer group"
               title="Scroll to bottom (ចុះទៅក្រោម)"
             >
               <span className="text-[11px] font-semibold hidden sm:inline">Scroll to bottom</span>
@@ -847,7 +850,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Input Bar matching Immersive UI glass footer */}
-      <div className="shrink-0 p-3 md:p-6 border-t border-white/10 glass z-10">
+      <div className="shrink-0 p-3 md:p-6 gradient-footer z-10">
         <div className="max-w-3xl mx-auto space-y-2.5">
           {/* Unconfigured Provider Banner */}
           {!activeProviderConfig.isConfigured && activeModel.provider !== 'gemini' && (
@@ -929,8 +932,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
           )}
 
-          {/* Input container matching Immersive UI */}
-          <div className="relative flex items-center">
+          {/* Input container — gradient frame */}
+          <div className="gradient-input-frame">
+          <div className="relative flex items-center gradient-input-inner">
             {/* Attachment Button (+) and Options Menu */}
             <div className="absolute left-3 z-20 flex items-center" ref={attachMenuRef}>
               <input
@@ -1026,7 +1030,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask anything or discuss attached files..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-12 text-base sm:text-sm text-white placeholder-white/40 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-colors resize-none leading-relaxed max-h-44"
+              className="w-full bg-transparent border-0 rounded-xl py-3 pl-12 pr-12 text-base sm:text-sm text-white placeholder-white/40 focus:outline-none transition-colors resize-none leading-relaxed max-h-44"
             />
 
             {/* Send button with cyan glow & spinning response animation (🔃) */}
@@ -1039,19 +1043,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
               }
               className={`absolute right-2.5 p-2 rounded-lg transition-all ${
                 isGenerating
-                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-[0_0_14px_rgba(0,242,255,0.3)] cursor-wait'
+                  ? 'gradient-pill-active text-violet-100 cursor-wait'
                   : inputVal.trim() || attachedImages.length > 0 || attachedFiles.length > 0
-                  ? 'bg-cyan-500 text-black hover:bg-cyan-400 shadow-[0_0_12px_rgba(0,242,255,0.4)] cursor-pointer'
+                  ? 'gradient-btn cursor-pointer'
                   : 'bg-white/5 text-white/30 cursor-not-allowed'
               }`}
               title={isGenerating ? 'AI is responding... (កំពុងឆ្លើយតប)' : 'Send message (⬆️)'}
             >
               {isGenerating ? (
-                <RefreshCw className="h-4 w-4 stroke-[2.5] animate-spin text-cyan-400" />
+                <RefreshCw className="h-4 w-4 stroke-[2.5] animate-spin text-violet-200" />
               ) : (
                 <ArrowUp className="h-4 w-4 stroke-[2.5]" />
               )}
             </button>
+          </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-1 px-1 text-[10px] text-white/30">
@@ -1075,7 +1080,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Attached File Content Viewer Modal */}
       {viewingFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-in fade-in duration-200">
-          <div className="bg-[#0e1017] border border-cyan-500/30 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,242,255,0.2)] overflow-hidden">
+          <div className="gradient-panel-modal border border-violet-400/40 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(139,92,246,0.35)] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 shrink-0">

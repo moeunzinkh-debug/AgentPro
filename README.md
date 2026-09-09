@@ -95,6 +95,27 @@ wrangler.jsonc           # Cloudflare Workers config
 | `npm start` | Serve production build via Express (Node) |
 | `npm run lint` | Type-check with `tsc --noEmit` |
 
+## Gradient UI & Worker sync
+
+The UI is an aurora-gradient theme (animated mesh background, gradient chat
+bubbles, gradient sidebar/headers/buttons) defined in `src/index.css` and
+applied across Chat, Tasks, Models, Settings, History, and all modals.
+It uses opaque gradients only — never `backdrop-filter` (see tests).
+
+**រាល់ការផ្លាស់ប្ដូរ UI ត្រូវតែបញ្ចូលទៅក្នុង `worker/index.ts`:** every UI change
+flows into the Worker because Wrangler runs `npm run build` before dev/deploy
+and serves `dist/` as Worker static assets. The release marker in
+`src/uiVersion.ts` (`UI_VERSION`) is shared by the app and the Worker:
+
+- `GET /api/ui-version` → `{ uiVersion, uiTheme, uiBuild }`
+- `GET /api/health` / `/api/status` → includes the same UI release info
+- Every static-asset response carries an `X-UI-Version` header
+- Settings → About shows an **UI Release × Worker Sync** card comparing the
+  app bundle version with the serving Worker's version
+
+Rule: bump `UI_VERSION` in `src/uiVersion.ts` on every UI change, then
+`npm run deploy` so the new gradient bundle is included in the Worker.
+
 ## UI regression tests
 
 ```bash

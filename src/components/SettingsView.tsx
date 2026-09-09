@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  CheckCircle2,
   ExternalLink,
   Info,
   Palette,
@@ -12,6 +13,7 @@ import {
 import { AppSettings, SystemPresetType, ThemeType } from '../types';
 import { DEFAULT_SETTINGS } from '../services/storage';
 import { SYSTEM_PRESETS } from '../data/defaultCatalog';
+import { UI_BUILD_DATE, UI_THEME, UI_VERSION } from '../uiVersion';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -86,7 +88,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
             onClick={() => setActiveTab('theme')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'theme'
-                ? 'border border-cyan-500/50 bg-cyan-500/10 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.15)]'
+                ? 'gradient-pill-active text-violet-100'
                 : 'text-white/50 hover:text-white hover:bg-white/5 border border-transparent'
             }`}
           >
@@ -98,7 +100,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
             onClick={() => setActiveTab('parameters')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'parameters'
-                ? 'border border-cyan-500/50 bg-cyan-500/10 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.15)]'
+                ? 'gradient-pill-active text-violet-100'
                 : 'text-white/50 hover:text-white hover:bg-white/5 border border-transparent'
             }`}
           >
@@ -110,7 +112,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
             onClick={() => setActiveTab('about')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'about'
-                ? 'border border-cyan-500/50 bg-cyan-500/10 text-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.15)]'
+                ? 'gradient-pill-active text-violet-100'
                 : 'text-white/50 hover:text-white hover:bg-white/5 border border-transparent'
             }`}
           >
@@ -140,8 +142,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 onClick={() => handleThemeChange('immersive')}
                 className={`cursor-pointer rounded-xl p-4 transition-all ${
                   settings.theme === 'immersive'
-                    ? 'glass border border-cyan-500/60 accent-border shadow-[0_0_16px_rgba(0,242,255,0.18)]'
-                    : 'glass border border-white/10 hover:border-cyan-500/30'
+                    ? 'gradient-card-soft accent-border shadow-[0_0_16px_rgba(139,92,246,0.35)]'
+                    : 'glass border border-white/10 hover:border-violet-400/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -161,7 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                   <div className="h-6 w-8 rounded bg-[#00a8b3]" />
                 </div>
                 <p className="text-[11px] text-white/40 leading-relaxed">
-                  Cyber `#050507` background with opaque gradient panels and electric `#00f2ff` cyan neon glow.
+                  Aurora gradient mesh (`#05060f`) with violet → cyan → fuchsia glows on opaque gradient panels.
                 </p>
               </div>
 
@@ -170,8 +172,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 onClick={() => handleThemeChange('dark-emerald')}
                 className={`cursor-pointer rounded-xl p-4 transition-all ${
                   settings.theme === 'dark-emerald'
-                    ? 'glass border border-cyan-500/60 accent-border shadow-[0_0_16px_rgba(0,242,255,0.18)]'
-                    : 'glass border border-white/10 hover:border-cyan-500/30'
+                    ? 'gradient-card-soft accent-border shadow-[0_0_16px_rgba(139,92,246,0.35)]'
+                    : 'glass border border-white/10 hover:border-violet-400/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -200,8 +202,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 onClick={() => handleThemeChange('dark-slate')}
                 className={`cursor-pointer rounded-xl p-4 transition-all ${
                   settings.theme === 'dark-slate'
-                    ? 'glass border border-cyan-500/60 accent-border shadow-[0_0_16px_rgba(0,242,255,0.18)]'
-                    : 'glass border border-white/10 hover:border-cyan-500/30'
+                    ? 'gradient-card-soft accent-border shadow-[0_0_16px_rgba(139,92,246,0.35)]'
+                    : 'glass border border-white/10 hover:border-violet-400/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -230,8 +232,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 onClick={() => handleThemeChange('midnight-blue')}
                 className={`cursor-pointer rounded-xl p-4 transition-all ${
                   settings.theme === 'midnight-blue'
-                    ? 'glass border border-cyan-500/60 accent-border shadow-[0_0_16px_rgba(0,242,255,0.18)]'
-                    : 'glass border border-white/10 hover:border-cyan-500/30'
+                    ? 'gradient-card-soft accent-border shadow-[0_0_16px_rgba(139,92,246,0.35)]'
+                    : 'glass border border-white/10 hover:border-violet-400/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -260,8 +262,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 onClick={() => handleThemeChange('light')}
                 className={`cursor-pointer rounded-xl p-4 transition-all ${
                   settings.theme === 'light'
-                    ? 'glass border border-cyan-500/60 accent-border shadow-[0_0_16px_rgba(0,242,255,0.18)]'
-                    : 'glass border border-white/10 hover:border-cyan-500/30'
+                    ? 'gradient-card-soft accent-border shadow-[0_0_16px_rgba(139,92,246,0.35)]'
+                    : 'glass border border-white/10 hover:border-violet-400/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -329,7 +331,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                     onClick={() => handleApplyPreset(key)}
                     className={`text-left p-3 rounded-lg border text-xs transition-all cursor-pointer ${
                       settings.parameters.systemPreset === key
-                        ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200 shadow-[0_0_10px_rgba(0,242,255,0.12)]'
+                        ? 'gradient-pill-active text-violet-100'
                         : 'border-white/5 bg-white/5 text-white/70 hover:border-white/20'
                     }`}
                   >
@@ -369,7 +371,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden relative">
                   <div
-                    className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(0,242,255,0.5)] transition-all"
+                    className="h-full transition-all bg-gradient-to-r from-violet-500 to-cyan-400 shadow-[0_0_8px_rgba(139,92,246,0.6)]"
                     style={{ width: `${Math.min((settings.parameters.temperature / 2) * 100, 100)}%` }}
                   />
                 </div>
@@ -399,7 +401,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden relative">
                   <div
-                    className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(0,242,255,0.5)] transition-all"
+                    className="h-full transition-all bg-gradient-to-r from-violet-500 to-cyan-400 shadow-[0_0_8px_rgba(139,92,246,0.6)]"
                     style={{ width: `${settings.parameters.topP * 100}%` }}
                   />
                 </div>
@@ -429,7 +431,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden relative">
                   <div
-                    className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(0,242,255,0.5)] transition-all"
+                    className="h-full transition-all bg-gradient-to-r from-violet-500 to-cyan-400 shadow-[0_0_8px_rgba(139,92,246,0.6)]"
                     style={{
                       width: `${Math.min((settings.parameters.maxTokens / 16384) * 100, 100)}%`,
                     }}
@@ -495,9 +497,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
         {/* 3. ABOUT SECTION */}
         {activeTab === 'about' && (
           <div className="space-y-6">
-            <div className="rounded-xl glass border border-cyan-500/40 p-5 shadow-[0_0_20px_rgba(0,242,255,0.1)]">
+            <div className="rounded-xl gradient-card p-5 shadow-[0_0_20px_rgba(139,92,246,0.3)]">
               <div className="flex items-center gap-3 mb-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 shadow-[0_0_12px_rgba(0,242,255,0.3)]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-avatar-agent">
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
@@ -511,6 +513,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 Agent Pro connects to your API endpoints and models (DeepSeek, OpenRouter, or custom OpenAI-compatible gateways) with streaming, markdown, and code execution.
               </p>
             </div>
+
+            {/* UI Release — verifies this gradient UI is bundled into worker/index.ts */}
+            <WorkerUiSyncCard />
 
             {/* Provider Free Access Links */}
             <div>
@@ -586,7 +591,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
             </div>
 
             {/* Local Security banner */}
-            <div className="rounded-xl glass border border-white/10 p-4 space-y-2 text-xs text-white/40">
+            <div className="rounded-xl gradient-card-soft p-4 space-y-2 text-xs text-white/40">
               <h4 className="font-bold text-white uppercase tracking-wider text-[11px]">
                 Zero-Telemetry & Local Security
               </h4>
@@ -599,6 +604,92 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/**
+ * Shows the bundled UI release and confirms the serving Worker reports the
+ * same version (via GET /api/ui-version + the X-UI-Version response header).
+ * រាល់ការផ្លាស់ប្ដូរ UI ត្រូវតែបញ្ចូលទៅក្នុង worker/index.ts — if the versions
+ * differ, redeploy so `npm run build` re-bundles the UI into Worker assets.
+ */
+const WorkerUiSyncCard: React.FC = () => {
+  const [workerVersion, setWorkerVersion] = useState<string | null>(null);
+  const [workerTheme, setWorkerTheme] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/ui-version')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data && typeof data.uiVersion === 'string') {
+          setWorkerVersion(data.uiVersion);
+          setWorkerTheme(typeof data.uiTheme === 'string' ? data.uiTheme : null);
+        }
+        setChecked(true);
+      })
+      .catch(() => {
+        if (!cancelled) setChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const inSync = workerVersion === UI_VERSION;
+
+  return (
+    <div className="rounded-xl gradient-card p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs uppercase tracking-wider text-white/80 font-bold flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-violet-300" />
+          <span>UI Release (Gradient) × Worker Sync</span>
+        </h3>
+        {checked && workerVersion ? (
+          <span
+            className={`text-[10px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 ${
+              inSync
+                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
+                : 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+            }`}
+          >
+            <CheckCircle2 className="h-3 w-3" />
+            <span>{inSync ? 'Worker in sync' : 'Worker outdated — redeploy'}</span>
+          </span>
+        ) : (
+          <span className="text-[10px] font-mono text-white/40">checking worker…</span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg bg-black/30 border border-white/10 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-white/40">App UI version</div>
+          <div className="font-mono font-bold text-violet-200 mt-0.5">v{UI_VERSION}</div>
+        </div>
+        <div className="rounded-lg bg-black/30 border border-white/10 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-white/40">Worker UI version</div>
+          <div className="font-mono font-bold text-cyan-200 mt-0.5">
+            {workerVersion ? `v${workerVersion}` : checked ? 'unavailable (dev?)' : '…'}
+          </div>
+        </div>
+        <div className="rounded-lg bg-black/30 border border-white/10 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-white/40">Theme / Build</div>
+          <div className="font-mono font-bold text-fuchsia-200 mt-0.5">
+            {workerTheme || UI_THEME}
+          </div>
+          <div className="font-mono text-[10px] text-white/40">{UI_BUILD_DATE}</div>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-white/40 leading-relaxed">
+        Every UI change is bundled into <span className="font-mono text-violet-300">worker/index.ts</span> via{' '}
+        <span className="font-mono text-violet-300">npm run build</span> (dist/ → Worker static assets).
+        The Worker stamps each response with an <span className="font-mono">X-UI-Version</span> header so
+        you can confirm the deployed gradient UI matches this release.
+      </p>
     </div>
   );
 };

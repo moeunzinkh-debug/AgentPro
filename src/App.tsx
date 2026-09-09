@@ -616,8 +616,10 @@ export default function App() {
       case 'light':
         return 'theme-light bg-[#f8fafc] text-slate-900';
       case 'dark-emerald':
-      default:
         return 'theme-dark-emerald bg-[#080c0f] text-slate-100';
+      case 'immersive':
+      default:
+        return 'theme-immersive bg-[#05060f] text-slate-100';
     }
   }, [settings.theme]);
 
@@ -634,7 +636,7 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
         {/* Toast confirmation notification */}
         {savedToastMsg && (
-          <div className="absolute top-4 left-4 sm:left-auto right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0c1a20] to-[#0a0f16] border border-cyan-400 text-cyan-300 text-xs font-semibold shadow-[0_0_25px_rgba(0,242,255,0.4)] animate-fade-in">
+          <div className="absolute top-4 left-4 sm:left-auto right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl gradient-card border-violet-400/60 text-violet-100 text-xs font-semibold shadow-[0_0_25px_rgba(139,92,246,0.5)] animate-fade-in">
             <CheckCircle className="h-4 w-4 text-cyan-400 shrink-0" />
             <span>{savedToastMsg}</span>
           </div>
