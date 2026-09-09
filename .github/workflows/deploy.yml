@@ -2,12 +2,18 @@
 #
 # One-time setup (repo owner):
 #   1. Create an API token: https://dash.cloudflare.com/profile/api-tokens
-#      -> "Edit Cloudflare Workers" template.
+#      -> Create Token -> use the "Edit Cloudflare Workers" template.
+#      Do NOT pick "Cloudflare Stream and Images" — that is for video/photos
+#      and cannot deploy a Worker. Required permissions are:
+#         Account | Workers Scripts  | Edit
+#         Account | Account Settings | Read
+#         User    | User Details     | Read
 #   2. Add it as a repository secret:
 #      Settings -> Secrets and variables -> Actions -> New repository secret
 #         Name:  CLOUDFLARE_API_TOKEN
-#   3. (Optional) Add CLOUDFLARE_ACCOUNT_ID if your token can access more
-#      than one account, to pin the deploy target.
+#   3. Also add CLOUDFLARE_ACCOUNT_ID (Workers & Pages overview, right sidebar).
+#      Without it Wrangler tries to list accounts and fails if the token
+#      cannot read Account Settings.
 #
 # Until the secret exists this workflow fails fast with a clear message
 # instead of half-deploying.
@@ -31,8 +37,10 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN == ''
         run: |
           echo "::error::Secret CLOUDFLARE_API_TOKEN is not set."
-          echo "Add it under Settings -> Secrets and variables -> Actions,"
-          echo "using a Cloudflare API token with 'Edit Cloudflare Workers' permissions."
+          echo "::error::Add a Repository secret (not Environment) named exactly CLOUDFLARE_API_TOKEN."
+          echo "Path: Settings -> Secrets and variables -> Actions -> Repository secrets."
+          echo "Token must use the 'Edit Cloudflare Workers' template (not Stream and Images),"
+          echo "with no Client IP Address Filtering, plus optional CLOUDFLARE_ACCOUNT_ID."
           exit 1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -53,29 +61,44 @@ jobs:
       # Output is teed to a file so the step below can surface the real
       # wrangler error as job annotations when the deploy fails.
       - name: Deploy
+        id: wrangler
         run: |
           set -o pipefail
+          # Mobile paste often adds a trailing newline/space that makes
+          # Cloudflare return Authentication error on /workers/services/*.
+          export CLOUDFLARE_API_TOKEN="$(printf '%s' "$CLOUDFLARE_API_TOKEN" | tr -d '\r\n\t ')"
+          export CLOUDFLARE_ACCOUNT_ID="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -d '\r\n\t ')"
+          echo "Using API token length ${#CLOUDFLARE_API_TOKEN}, account id length ${#CLOUDFLARE_ACCOUNT_ID}."
           npm run deploy 2>&1 | tee "$GITHUB_WORKSPACE/deploy.log"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Report deploy failure
-        if: failure()
+        if: failure() && steps.wrangler.outcome == 'failure'
         run: |
           LOG="$GITHUB_WORKSPACE/deploy.log"
+          PLAIN="$GITHUB_WORKSPACE/deploy.plain.log"
           echo "::error::Wrangler deploy failed — key error lines follow."
           if [ -f "$LOG" ]; then
-            MATCHES=$(grep -E '✘|\[ERROR\]|APIError|Authentication|authentication|permission|not authorized|more than one account|CLOUDFLARE_ACCOUNT_ID|exited with|failed with' "$LOG" | tail -8 | cut -c1-170)
+            # Strip ANSI color codes so annotations are readable on mobile.
+            sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g' "$LOG" > "$PLAIN"
+            MATCHES=$(grep -E '\[ERROR\]|APIError|Authentication error|incorrect permissions|not authorized|workers/services|CLOUDFLARE_ACCOUNT_ID|exited with|failed with' "$PLAIN" | tail -12)
             if [ -n "$MATCHES" ]; then
               printf '%s\n' "$MATCHES" | while IFS= read -r line; do
                 echo "::error::${line//%/?}"
               done
             else
-              tail -6 "$LOG" | cut -c1-170 | while IFS= read -r line; do
+              tail -8 "$PLAIN" | while IFS= read -r line; do
                 echo "::error::${line//%/?}"
               done
             fi
           else
             echo "::error::No deploy log captured; see the Deploy step output in the Actions UI."
+          fi
+          if [ -f "$PLAIN" ] && grep -qE 'retrieve account IDs|incorrect permissions|authentication may have expired|Authentication error|workers/services/.+failed' "$PLAIN"; then
+            echo "::error::API token cannot deploy Workers (auth/permission error)."
+            echo "::error::Recreate the token from the Edit Cloudflare Workers template — not Stream and Images."
+            echo "::error::Needed: Account/Workers Scripts/Edit, Account/Account Settings/Read, User/User Details/Read."
+            echo "::error::Do not set Client IP Address Filtering. Then replace GitHub secret CLOUDFLARE_API_TOKEN."
           fi
