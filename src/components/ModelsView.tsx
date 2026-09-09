@@ -173,10 +173,11 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const providerKeys: ProviderType[] = ['gemini', 'openai', 'grok', 'kimi', 'deepseek', 'custom'];
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-5 md:p-8 relative">
+    <div className="view-surface flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
       <div className="aurora-bg z-0" />
       <div className="aurora-orb aurora-orb-violet w-72 h-72 -top-16 -right-16 z-0" />
       <div className="aurora-orb aurora-orb-cyan w-80 h-80 bottom-0 -left-24 z-0" />
+      <div className="view-scroll flex-1 min-h-0 custom-scrollbar p-5 md:p-8">
       <div className="max-w-2xl mx-auto w-full space-y-6 relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
@@ -519,6 +520,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

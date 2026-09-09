@@ -62,7 +62,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden relative">
+    <div className="view-surface flex-1 flex flex-col min-w-0 min-h-0 bg-[#050507] text-[#e2e2e7] overflow-hidden">
       {/* Ambient radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,242,255,0.05)_0%,transparent_50%)] pointer-events-none z-0" />
 
