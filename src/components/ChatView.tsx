@@ -362,7 +362,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   className="fixed inset-0 z-30"
                   onClick={() => setShowModelDropdown(false)}
                 />
-                <div className="absolute left-0 top-full mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-2xl glass border border-cyan-500/30 bg-[#090b0e]/95 backdrop-blur-2xl p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[min(30rem,50dvh)] overflow-y-auto custom-scrollbar">
+                <div className="absolute left-0 top-full mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-2xl glass border border-cyan-500/30 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 max-h-[min(30rem,50dvh)] overflow-y-auto custom-scrollbar">
                   {/* Dropdown Header */}
                   <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/10 mb-2.5">
                     <div className="text-[10px] uppercase tracking-widest text-white/60 font-bold">
@@ -966,7 +966,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
               {/* Attach Dropdown Menu */}
               {showAttachMenu && (
-                <div className="absolute bottom-11 left-0 w-64 rounded-xl border border-cyan-500/30 bg-[#0d0f17]/95 backdrop-blur-md shadow-[0_0_25px_rgba(0,242,255,0.2)] p-1.5 space-y-1 z-30">
+                <div className="absolute bottom-11 left-0 w-64 rounded-xl border border-cyan-500/30 bg-gradient-to-b from-[#11161f] to-[#0a0d12] shadow-[0_0_25px_rgba(0,242,255,0.2)] p-1.5 space-y-1 z-30">
                   <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-cyan-400/70 border-b border-white/5">
                     Upload Options (ជម្រើសផ្ទុកឡើង)
                   </div>
@@ -1071,7 +1071,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Attached File Content Viewer Modal */}
       {viewingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-in fade-in duration-200">
           <div className="bg-[#0e1017] border border-cyan-500/30 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,242,255,0.2)] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5">
               <div className="flex items-center gap-3 min-w-0">

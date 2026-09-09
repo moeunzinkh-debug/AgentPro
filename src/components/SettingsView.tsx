@@ -130,7 +130,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                 Visual Aesthetic
               </h2>
               <p className="text-xs text-white/60">
-                Select your preferred theme system. The &quot;Immersive UI&quot; theme features cybernetic neon cyan glows on an obsidian glass canvas.
+                Select your preferred theme system. The &quot;Immersive UI&quot; theme features cybernetic neon cyan glows on an obsidian gradient canvas.
               </p>
             </div>
 
@@ -161,7 +161,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                   <div className="h-6 w-8 rounded bg-[#00a8b3]" />
                 </div>
                 <p className="text-[11px] text-white/40 leading-relaxed">
-                  Cyber `#050507` background with translucent glass panels and electric `#00f2ff` cyan neon glow.
+                  Cyber `#050507` background with opaque gradient panels and electric `#00f2ff` cyan neon glow.
                 </p>
               </div>
 

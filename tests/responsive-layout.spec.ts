@@ -125,7 +125,24 @@ test('touch browsers avoid nested backdrop blur even in desktop-site mode', asyn
   });
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:3000');
-  await expect(page.locator('header')).toHaveCSS('backdrop-filter', 'none');
+  // Assembled at runtime so Tailwind's source scanner never sees the token
+  // and never ships the corresponding utility.
+  const blurProp = ['backdrop', 'filter'].join('-');
+  await expect(page.locator('header')).toHaveCSS(blurProp, 'none');
+  // The gradient UI must never rely on backdrop blur anywhere (ghost-panel
+  // compositing artifacts on cheap mobile WebViews), even with panels open.
+  const picker = page.getByRole('button', { name: 'Select active model' });
+  await expectUsable(picker);
+  await picker.tap();
+  await expect(page.locator('.glass').first()).toBeVisible();
+  const blurredCount = await page.evaluate(
+    (prop) =>
+      Array.from(document.querySelectorAll('*')).filter(
+        (el) => getComputedStyle(el).getPropertyValue(prop) !== 'none'
+      ).length,
+    blurProp
+  );
+  expect(blurredCount).toBe(0);
   await page.getByRole('navigation').getByRole('button', { name: 'Tasks', exact: true }).tap();
   const run = page.getByRole('button', { name: 'Run Workflow', exact: true });
   await run.scrollIntoViewIfNeeded();
