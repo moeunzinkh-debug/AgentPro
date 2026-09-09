@@ -60,6 +60,7 @@ jobs:
       # Output is teed to a file so the step below can surface the real
       # wrangler error as job annotations when the deploy fails.
       - name: Deploy
+        id: wrangler
         run: |
           set -o pipefail
           npm run deploy 2>&1 | tee "$GITHUB_WORKSPACE/deploy.log"
@@ -68,7 +69,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Report deploy failure
-        if: failure()
+        if: failure() && steps.wrangler.outcome == 'failure'
         run: |
           LOG="$GITHUB_WORKSPACE/deploy.log"
           echo "::error::Wrangler deploy failed — key error lines follow."
