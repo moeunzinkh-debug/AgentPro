@@ -87,11 +87,19 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Avoid nested backdrop-filter compositing artifacts on mobile browsers. */
+/* Avoid nested backdrop-filter compositing artifacts on mobile browsers.
+   Only the standard property is declared; the CSS minifier adds any vendor
+   prefix required by the build targets. */
 @media (max-width: 767px), (pointer: coarse) {
   .glass, .glass-panel {
     background: #11171b;
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+  }
+
+  /* Tailwind backdrop-blur utilities also create compositor layers that cheap
+     mobile WebViews repaint incorrectly (ghost panels / glitch bands). Force
+     them off and keep the panels opaque instead. */
+  [class*='backdrop-blur'] {
+    backdrop-filter: none !important;
   }
 }

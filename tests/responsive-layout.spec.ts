@@ -126,6 +126,14 @@ test('touch browsers avoid nested backdrop blur even in desktop-site mode', asyn
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:3000');
   await expect(page.locator('header')).toHaveCSS('backdrop-filter', 'none');
+  // Tailwind backdrop-blur utilities (model dropdown panel) must also be
+  // disabled on touch devices to avoid ghost-panel compositing artifacts.
+  const picker = page.getByRole('button', { name: 'Select active model' });
+  await expectUsable(picker);
+  await picker.tap();
+  const blurredPanel = page.locator('[class*="backdrop-blur"]').first();
+  await expect(blurredPanel).toBeVisible();
+  await expect(blurredPanel).toHaveCSS('backdrop-filter', 'none');
   await page.getByRole('navigation').getByRole('button', { name: 'Tasks', exact: true }).tap();
   const run = page.getByRole('button', { name: 'Run Workflow', exact: true });
   await run.scrollIntoViewIfNeeded();
