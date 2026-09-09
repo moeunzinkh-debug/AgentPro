@@ -45,13 +45,7 @@ npm run deploy            # Wrangler auto-runs vite build first
 
 The first `wrangler deploy` prompts you to log in (`wrangler login`) or you can set a `CLOUDFLARE_API_TOKEN` env var for CI. After deploying, the app is live at `https://agentpro.<your-subdomain>.workers.dev`.
 
-GitHub Actions deploys on every push to `main` (see `.github/workflows/deploy.yml`). Create the token from the **Edit Cloudflare Workers** template — **not** “Cloudflare Stream and Images” (that permission is for video/photos and cannot deploy a Worker). Required token permissions:
-
-- Account → **Workers Scripts** → Edit
-- Account → **Account Settings** → Read
-- User → **User Details** → Read
-
-Store it as repo secret `CLOUDFLARE_API_TOKEN`, and also set `CLOUDFLARE_ACCOUNT_ID` (Workers & Pages overview, right sidebar) so Wrangler does not need to list accounts.
+Deployment is handled directly through Cloudflare Workers, not GitHub Actions. No GitHub Actions workflow or repository secrets are required. Use `npm run deploy` above to deploy with Wrangler.
 
 ### 3. Secrets (optional)
 
