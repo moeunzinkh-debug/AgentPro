@@ -115,7 +115,7 @@ export const SaveModelModal: React.FC<SaveModelModalProps> = ({
   const providerKeys: ProviderType[] = ['gemini', 'openai', 'grok', 'kimi', 'deepseek', 'custom'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85">
       <div className="w-full max-w-xl rounded-2xl glass border border-cyan-500/30 bg-[#0a0d13] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.9)] space-y-5 animate-in fade-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto custom-scrollbar">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">

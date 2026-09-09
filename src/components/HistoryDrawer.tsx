@@ -30,7 +30,7 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/80">
       <div className="w-full max-w-sm h-full glass-panel border-l border-white/10 text-[#e2e2e7] flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between glass">

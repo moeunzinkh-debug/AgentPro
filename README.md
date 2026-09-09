@@ -105,7 +105,9 @@ set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 On phones, navigation sits below the content and Tasks uses one scrolling column.
 Desktop retains the collapsible sidebar and split workflow workspace. The app
-uses dynamic viewport height to follow browser toolbar changes; opaque panels on
-small or touch screens avoid nested backdrop-blur rendering artifacts. Keyboard
+uses dynamic viewport height to follow browser toolbar changes. The UI is
+gradient-based and never uses backdrop blur filters (opaque gradient panels
+instead of glassmorphism), so mobile browsers that repaint blur layers
+incorrectly cannot show ghost panels or glitch bands. Keyboard
 resizing tests emulate a smaller viewport; actual device/browser rendering should
 also be checked after deployment.

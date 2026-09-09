@@ -15,19 +15,49 @@ body {
   margin: 0;
 }
 
-/* Immersive Glassmorphism */
+/* Immersive Gradient Surfaces.
+   The UI uses opaque gradients instead of glassmorphism: backdrop-filter is
+   never used because cheap mobile WebViews repaint blur layers incorrectly
+   (ghost panels / glitch bands). */
 .glass {
-  background: var(--surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(150deg, #141b26 0%, #0d1219 55%, #0a0e14 100%);
   border: 1px solid var(--border);
 }
 
 .glass-panel {
-  background: rgba(10, 12, 16, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: linear-gradient(160deg, #10151c 0%, #0a0d12 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Hard guard: this is a gradient UI — never allow backdrop blur. */
+.glass,
+.glass-panel,
+[class*='backdrop-blur'] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Theme root gradients */
+.theme-dark-emerald {
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(0, 209, 143, 0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #0a1013 0%, #080c0f 55%, #06090b 100%);
+}
+
+.theme-dark-slate {
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(56, 189, 248, 0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #111a2b 0%, #0b0f17 55%, #080b11 100%);
+}
+
+.theme-midnight {
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(37, 99, 235, 0.1) 0%, transparent 55%),
+    linear-gradient(180deg, #0a1128 0%, #050a1a 55%, #030712 100%);
+}
+
+.theme-light {
+  background-image: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
 }
 
 /* Neon Glows */
@@ -85,21 +115,4 @@ html, body, #root {
 
 .mobile-navigation {
   padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Avoid nested backdrop-filter compositing artifacts on mobile browsers.
-   Only the standard property is declared; the CSS minifier adds any vendor
-   prefix required by the build targets. */
-@media (max-width: 767px), (pointer: coarse) {
-  .glass, .glass-panel {
-    background: #11171b;
-    backdrop-filter: none;
-  }
-
-  /* Tailwind backdrop-blur utilities also create compositor layers that cheap
-     mobile WebViews repaint incorrectly (ghost panels / glitch bands). Force
-     them off and keep the panels opaque instead. */
-  [class*='backdrop-blur'] {
-    backdrop-filter: none !important;
-  }
 }
