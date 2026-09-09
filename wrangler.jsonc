@@ -9,6 +9,13 @@
   // Worker entry: handles /api/* and delegates everything else to static assets.
   "main": "worker/index.ts",
 
+  // Always rebuild the Vite app before Worker dev/deploy so every frontend
+  // change under src/, public/, and index.html is included in the Worker’s
+  // static assets. This fixes “Worker updated but web UI still looks old”.
+  "build": {
+    "command": "npm run build"
+  },
+
   // nodejs_compat lets the shared server code (and @google/genai) use Node-style
   // APIs such as process.env; with this compat date, process.env is also
   // auto-populated with the Worker's vars and secrets.

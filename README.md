@@ -29,6 +29,8 @@ npm start                 # serves dist/ + /api/* on http://0.0.0.0:3000
 
 The app ships with a Cloudflare Worker entry (`worker/index.ts`) and Wrangler config (`wrangler.jsonc`). One Worker serves both the API (`/api/chat` with SSE streaming, `/api/models`) and the static frontend with SPA fallback.
 
+Wrangler is configured to run `npm run build` automatically before `wrangler dev` and `wrangler deploy`, so the latest UI/app changes are always bundled into the Worker’s static assets instead of only updating the Worker script.
+
 ### 1. Prerequisites
 
 - A [Cloudflare account](https://dash.cloudflare.com/sign-up) (the Workers free tier is enough — the chat calls are I/O-bound, not CPU-bound)
@@ -38,7 +40,7 @@ The app ships with a Cloudflare Worker entry (`worker/index.ts`) and Wrangler co
 
 ```bash
 npm install
-npm run deploy            # = vite build && wrangler deploy
+npm run deploy            # Wrangler auto-runs vite build first
 ```
 
 The first `wrangler deploy` prompts you to log in (`wrangler login`) or you can set a `CLOUDFLARE_API_TOKEN` env var for CI. After deploying, the app is live at `https://agentpro.<your-subdomain>.workers.dev`.
@@ -61,7 +63,7 @@ For local Worker development, copy `.dev.vars.example` to `.dev.vars` instead.
 ### 4. Test locally on the Workers runtime
 
 ```bash
-npm run dev:worker         # = vite build && wrangler dev -> http://localhost:8787
+npm run dev:worker         # Wrangler auto-runs vite build -> http://0.0.0.0:8787
 ```
 
 ### Custom domain (optional)
@@ -85,9 +87,9 @@ wrangler.jsonc           # Cloudflare Workers config
 | Script | Description |
 | --- | --- |
 | `npm run dev` | Vite dev server with API middleware (port 3000) |
-| `npm run dev:worker` | Build + run the Cloudflare Worker locally (port 8787) |
+| `npm run dev:worker` | Run the Cloudflare Worker locally on `0.0.0.0:8787`; Wrangler auto-builds the frontend first |
 | `npm run build` | Build the frontend to `dist/` |
-| `npm run deploy` | Build + deploy to Cloudflare Workers |
+| `npm run deploy` | Deploy to Cloudflare Workers; Wrangler auto-builds the frontend first |
 | `npm start` | Serve production build via Express (Node) |
 | `npm run lint` | Type-check with `tsc --noEmit` |
 
