@@ -440,6 +440,18 @@ html, body, #root {
   overscroll-behavior: contain;
 }
 
+/* Each chat message is its own render/paint layer. `content-visibility: auto`
+   lets the browser skip layout + paint for messages that are scrolled out of
+   view, which is what keeps the viewport smooth while a long reply streams in
+   (and while scrolling up/down through a long thread). `contain-intrinsic-size`
+   reserves an estimated height so the scrollbar doesn't jump before an
+   off-screen message is measured; the `auto` keyword makes the browser
+   remember the real size after the first paint. */
+.message-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+}
+
 /* The scrollable body of a view: its own layer so the animated aurora layer
    behind it is never re-composited while the content scrolls. */
 .view-scroll {

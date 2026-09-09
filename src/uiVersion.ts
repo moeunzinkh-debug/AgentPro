@@ -10,6 +10,6 @@
  * Bump UI_VERSION on every UI change so each deploy is verifiable end-to-end:
  * the version shown in the app must match the version reported by the Worker.
  */
-export const UI_VERSION = '3.0.0';
+export const UI_VERSION = '3.0.1';
 export const UI_THEME = 'aurora-gradient';
 export const UI_BUILD_DATE = '2026-09-09';
