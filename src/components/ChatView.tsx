@@ -676,7 +676,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               return (
                 <div
                   key={msg.id}
-                  className={`flex gap-3.5 animate-message-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                  className={`message-row flex gap-3.5 animate-message-in ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                 >
                   {/* Avatar matching Immersive UI: A for Agent, U for User */}
                   {!isUser ? (

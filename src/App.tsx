@@ -513,13 +513,24 @@ export default function App() {
         let streamReasoning = '';
         let lastChunkModel = '';
         let streamRaf = 0;
+        let lastStreamFlush = 0;
 
         // Apply the accumulated stream buffer to state. Token chunks from the
-        // SSE reader are coalesced into ONE update per animation frame —
+        // SSE reader are coalesced into at most ONE update per animation frame —
         // updating state (and re-parsing markdown, re-scrolling, persisting)
         // for every single token is what made the UI jank and jump on mobile.
-        const flushStreamedContent = () => {
-          streamRaf = 0;
+        //
+        // ADAPTIVE THROTTLE: short replies still update every frame (~60fps) so
+        // typing feels instant, but once a reply grows past STREAM_THROTTLE_AFTER
+        // chars we cap updates to ~STREAM_MIN_INTERVAL_MS. Re-rendering the whole
+        // growing markdown of a long reply on EVERY frame is what made long
+        // answers stutter and made the viewport fight the relayout while
+        // scrolling — it is purely client-side render cost, not the API/worker.
+        const STREAM_MIN_INTERVAL_MS = 40; // ≈25fps cap for long replies
+        const STREAM_THROTTLE_AFTER = 4000; // chars before the cap kicks in
+
+        const commitStreamedContent = () => {
+          lastStreamFlush = performance.now();
           setConversations((prev) =>
             prev.map((c) => {
               if (c.id === currentConvId) {
@@ -545,6 +556,20 @@ export default function App() {
           );
         };
 
+        // Coalesce token chunks into a single frame update; for long replies,
+        // defer to the next frame until the min interval has elapsed so we never
+        // re-render a 20k-char markdown blob more than ~25 times per second.
+        const scheduleStreamFlush = () => {
+          const elapsed = performance.now() - lastStreamFlush;
+          const isLongReply = streamContent.length > STREAM_THROTTLE_AFTER;
+          if (!isLongReply || elapsed >= STREAM_MIN_INTERVAL_MS) {
+            streamRaf = 0;
+            commitStreamedContent();
+          } else {
+            streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
+          }
+        };
+
         const response = await sendChatMessageStream(
           {
             provider: activeModel.provider,
@@ -561,7 +586,7 @@ export default function App() {
             if (chunk.model) lastChunkModel = chunk.model;
 
             if (!streamRaf) {
-              streamRaf = window.requestAnimationFrame(flushStreamedContent);
+              streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
             }
           }
         );

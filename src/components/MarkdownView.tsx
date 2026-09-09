@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { Check, Copy, Terminal } from 'lucide-react';
 
 interface MarkdownViewProps {
@@ -6,80 +6,92 @@ interface MarkdownViewProps {
   isStreaming?: boolean;
 }
 
-export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, isStreaming }) => {
-  // Simple, robust parser for code blocks, bold, headers, lists, quotes, inline code
-  const blocks = React.useMemo(() => {
-    const parts: Array<{ type: 'code' | 'text'; content: string; language?: string }> = [];
-    const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match;
+/**
+ * Markdown renderer for chat responses.
+ *
+ * Wrapped in `memo` so that messages whose `content` did NOT change (every
+ * already-completed message in the thread) are completely skipped during the
+ * re-render that fires on *every* streamed token of the active reply. Without
+ * this, a single incoming token forced React to re-parse and re-render the
+ * markdown of the entire conversation — which is exactly what made long
+ * replies stutter and made scrolling fight the per-frame relayout.
+ *
+ * NOTE: the streaming (last) message still re-renders every frame, but that is
+ * a single message, and App.tsx throttles those updates for very long replies.
+ */
+export const MarkdownView = memo(
+  ({ content, isStreaming }: MarkdownViewProps) => {
+    // Simple, robust parser for code blocks, bold, headers, lists, quotes, inline code.
+    // Re-parsed only when `content` changes (i.e. for the actively streaming message).
+    const blocks = React.useMemo(() => {
+      const parts: Array<{ type: 'code' | 'text'; content: string; language?: string }> = [];
+      const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
 
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: content.substring(lastIndex, match.index),
-        });
-      }
-      parts.push({
-        type: 'code',
-        language: match[1] || 'text',
-        content: match[2],
-      });
-      lastIndex = match.index + match[0].length;
-    }
-
-    if (lastIndex < content.length) {
-      const remaining = content.substring(lastIndex);
-      const unclosedCodeMatch = remaining.match(/^```([a-zA-Z0-9_-]*)\n([\s\S]*)$/);
-      if (unclosedCodeMatch) {
+      while ((match = codeBlockRegex.exec(content)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push({
+            type: 'text',
+            content: content.substring(lastIndex, match.index),
+          });
+        }
         parts.push({
           type: 'code',
-          language: unclosedCodeMatch[1] || 'text',
-          content: unclosedCodeMatch[2],
+          language: match[1] || 'text',
+          content: match[2],
         });
-      } else {
-        parts.push({
-          type: 'text',
-          content: remaining,
-        });
+        lastIndex = match.index + match[0].length;
       }
-    }
 
-    return parts;
-  }, [content]);
+      if (lastIndex < content.length) {
+        const remaining = content.substring(lastIndex);
+        const unclosedCodeMatch = remaining.match(/^```([a-zA-Z0-9_-]*)\n([\s\S]*)$/);
+        if (unclosedCodeMatch) {
+          parts.push({
+            type: 'code',
+            language: unclosedCodeMatch[1] || 'text',
+            content: unclosedCodeMatch[2],
+          });
+        } else {
+          parts.push({
+            type: 'text',
+            content: remaining,
+          });
+        }
+      }
 
-  return (
-    <div className="space-y-3 leading-relaxed text-[15px]">
-      {blocks.map((block, idx) => {
-        const isLastBlock = idx === blocks.length - 1;
-        if (block.type === 'code') {
+      return parts;
+    }, [content]);
+
+    return (
+      <div className="space-y-3 leading-relaxed text-[15px]">
+        {blocks.map((block, idx) => {
+          const isLastBlock = idx === blocks.length - 1;
+          if (block.type === 'code') {
+            return (
+              <div key={idx} className="relative">
+                <CodeBlock code={block.content} language={block.language || 'text'} />
+                {isStreaming && isLastBlock && <span className="stream-caret" />}
+              </div>
+            );
+          }
           return (
-            <div key={idx} className="relative">
-              <CodeBlock
-                code={block.content}
-                language={block.language || 'text'}
-              />
-              {isStreaming && isLastBlock && (
-                <span className="stream-caret" />
-              )}
+            <div key={idx} className="inline">
+              <TextBlock text={block.content} />
+              {isStreaming && isLastBlock && <span className="stream-caret" />}
             </div>
           );
-        }
-        return (
-          <div key={idx} className="inline">
-            <TextBlock text={block.content} />
-            {isStreaming && isLastBlock && (
-              <span className="stream-caret" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+        })}
+      </div>
+    );
+  },
+  // Shallow compare is enough: `content` is a primitive string and `isStreaming`
+  // a boolean, both referentially stable for non-streaming messages.
+  (prev, next) => prev.content === next.content && prev.isStreaming === next.isStreaming
+);
 
-const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {
+const CodeBlock = memo(({ code, language }: { code: string; language: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -118,9 +130,9 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, languag
       </pre>
     </div>
   );
-};
+});
 
-const TextBlock: React.FC<{ text: string }> = ({ text }) => {
+const TextBlock = memo(({ text }: { text: string }) => {
   const lines = text.split('\n');
 
   return (
@@ -193,7 +205,7 @@ const TextBlock: React.FC<{ text: string }> = ({ text }) => {
       })}
     </div>
   );
-};
+});
 
 function renderInline(text: string): React.ReactNode {
   // Inline code `code`
