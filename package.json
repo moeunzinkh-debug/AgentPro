@@ -10,8 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "dev:worker": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
+    "dev:worker": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "deploy": "wrangler deploy",
     "test:e2e": "playwright test"
   },
   "dependencies": {
