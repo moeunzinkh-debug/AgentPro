@@ -208,9 +208,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     );
   };
 
-  const handleKeyDown = (_e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter key (↩️) creates a regular new line and does not submit.
-    // Messages are sent exclusively by clicking the ⬆️ button.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl+Enter or Cmd+Enter submits message
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

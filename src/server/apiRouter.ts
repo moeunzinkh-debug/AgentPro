@@ -26,13 +26,13 @@ export function parseApiErrorMessage(err: any): string {
 
   // Check specific error patterns
   if (raw.includes('experiencing high demand') || raw.includes('503') || raw.includes('UNAVAILABLE')) {
-    return 'This model is currently experiencing high demand (503). Spikes in demand are temporary. Please try again in a few moments, or select another Gemini version (such as 3.7 or 3.5).';
+    return 'This model is currently experiencing high demand (503). Spikes in demand are temporary. Please try again in a few moments, or select another Gemini version.';
   }
   if (raw.includes('RESOURCE_EXHAUSTED') || raw.includes('429') || raw.includes('quota')) {
     return 'Quota or rate limit exceeded (429). Please wait a moment or check your API key quota.';
   }
-  if (raw.includes('API_KEY_INVALID') || raw.includes('API key not valid')) {
-    return 'Gemini API key is invalid or unauthorized. Please verify your API key in the Models tab.';
+  if (raw.includes('API_KEY_INVALID') || raw.includes('API key not valid') || raw.includes('401') || raw.includes('Unauthorized')) {
+    return 'API key is invalid, unauthorized, or expired. Please verify your API key in the Models configuration.';
   }
   if (raw.includes('not found') || raw.includes('404')) {
     return 'The requested model was not found or is unsupported on this endpoint.';
@@ -42,19 +42,31 @@ export function parseApiErrorMessage(err: any): string {
 }
 
 export function resolveGeminiModel(modelName?: string): string {
-  if (!modelName) return 'gemini-3.8-flash';
+  if (!modelName) return 'gemini-2.5-flash';
   const clean = modelName.replace(/^models\//, '').trim().toLowerCase();
 
   const aliasMap: Record<string, string> = {
-    'gemini-3.1-flash': 'gemini-3.1-flash-lite',
-    'gemini-3.1-pro': 'gemini-3.1-pro-preview',
-    'gemini-3.5-pro': 'gemini-pro-latest',
-    'gemini-3.6-pro': 'gemini-pro-latest',
-    'gemini-3.7-pro': 'gemini-pro-latest',
-    'gemini-3.8-pro': 'gemini-pro-latest',
-    'gemini-pro': 'gemini-pro-latest',
-    'gemini-flash': 'gemini-flash-latest',
-    'gemini-2.5-flash': 'gemini-3.5-flash',
+    'gemini-3.1-flash': 'gemini-2.5-flash',
+    'gemini-3.1-flash-lite': 'gemini-2.0-flash-lite',
+    'gemini-3.1-pro': 'gemini-2.5-pro',
+    'gemini-3.1-pro-preview': 'gemini-2.5-pro',
+    'gemini-3.5-flash': 'gemini-2.5-flash',
+    'gemini-3.5-flash-lite': 'gemini-2.0-flash-lite',
+    'gemini-3.5-pro': 'gemini-2.5-pro',
+    'gemini-3.6-flash': 'gemini-2.5-flash',
+    'gemini-3.6-pro': 'gemini-2.5-pro',
+    'gemini-3.7-flash': 'gemini-2.5-flash',
+    'gemini-3.7-pro': 'gemini-2.5-pro',
+    'gemini-3.8-flash': 'gemini-2.5-flash',
+    'gemini-3.8-pro': 'gemini-2.5-pro',
+    'gemini-pro-latest': 'gemini-2.5-pro',
+    'gemini-flash-latest': 'gemini-2.5-flash',
+    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-pro': 'gemini-2.5-pro',
+    'gemini-2.0-flash': 'gemini-2.0-flash',
+    'gemini-2.0-flash-lite': 'gemini-2.0-flash-lite',
+    'gemini-1.5-flash': 'gemini-1.5-flash',
+    'gemini-1.5-pro': 'gemini-1.5-pro',
   };
 
   return aliasMap[clean] || clean;
@@ -62,21 +74,14 @@ export function resolveGeminiModel(modelName?: string): string {
 
 export function getGeminiCandidateModels(requestedModel: string): string[] {
   const resolved = resolveGeminiModel(requestedModel);
-  const candidates = [resolved];
-
-  if (resolved.includes('3.8')) {
-    candidates.push('gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
-  } else if (resolved.includes('3.7')) {
-    candidates.push('gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
-  } else if (resolved.includes('3.6')) {
-    candidates.push('gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite');
-  } else if (resolved.includes('3.5')) {
-    candidates.push('gemini-3.1-flash-lite', 'gemini-3.7-flash', 'gemini-3.8-flash');
-  } else if (resolved.includes('3.1')) {
-    candidates.push('gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash');
-  } else {
-    candidates.push('gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite');
-  }
+  const candidates = [
+    resolved,
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.5-pro',
+    'gemini-1.5-pro',
+  ];
 
   return Array.from(new Set(candidates));
 }
@@ -120,14 +125,14 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
     const ai = new GoogleGenAI({ apiKey: key });
 
     // Format contents for Google GenAI
-    // Combine conversation history
     const contents: any[] = [];
 
     // Add user/assistant turns
     for (const msg of messages) {
+      const textVal = msg.content || (images && images.length > 0 ? 'Analyze the attached file/image.' : ' ');
       contents.push({
         role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
+        parts: [{ text: textVal }],
       });
     }
 
@@ -147,7 +152,7 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
       }
     }
 
-    const candidateModels = getGeminiCandidateModels(model || 'gemini-3.8-flash');
+    const candidateModels = getGeminiCandidateModels(model || 'gemini-2.5-flash');
     let lastError: any = null;
 
     for (let i = 0; i < candidateModels.length; i++) {
@@ -171,7 +176,8 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
           if (
             innerMsg.includes('invalid argument') ||
             innerMsg.includes('INVALID_ARGUMENT') ||
-            innerErr?.status === 400
+            innerErr?.status === 400 ||
+            innerMsg.includes('thinkingConfig')
           ) {
             // Fallback immediately to standard config without thinkingConfig
             response = await ai.models.generateContent({
@@ -224,7 +230,7 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
   if (provider === 'openrouter') {
     const key = apiKey || process.env.OPENROUTER_API_KEY;
     const isFreeModel = model.endsWith(':free');
-    
+
     if (!key && !isFreeModel) {
       throw new Error(
         'OpenRouter API key is required for non-free models. Please add your key in Models -> Configure API or switch to a :free model.'
@@ -426,7 +432,7 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
         formattedMessages.push({
           role: 'user',
           content: [
-            { type: 'text', text: m.content },
+            { type: 'text', text: m.content || ' ' },
             ...images.map((img) => ({ type: 'image_url', image_url: { url: img } })),
           ],
         });
@@ -488,7 +494,7 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
         formattedMessages.push({
           role: 'user',
           content: [
-            { type: 'text', text: m.content },
+            { type: 'text', text: m.content || ' ' },
             ...images.map((img) => ({ type: 'image_url', image_url: { url: img } })),
           ],
         });
@@ -642,7 +648,6 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
     let endpoint = baseUrl?.trim();
     if (!endpoint) {
       if (model.includes('/')) {
-        // Models with slash like deepseek/deepseek-v4-flash, anthropic/claude-3.5-sonnet, etc.
         endpoint = 'https://openrouter.ai/api/v1';
       } else if (model.toLowerCase().startsWith('deepseek')) {
         endpoint = 'https://api.deepseek.com/v1';
@@ -733,9 +738,10 @@ export async function handleChatStreamRequest(
 
     const contents: any[] = [];
     for (const msg of messages) {
+      const textVal = msg.content || (images && images.length > 0 ? 'Analyze the attached file/image.' : ' ');
       contents.push({
         role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }],
+        parts: [{ text: textVal }],
       });
     }
 
@@ -754,7 +760,7 @@ export async function handleChatStreamRequest(
       }
     }
 
-    const candidateModels = getGeminiCandidateModels(model || 'gemini-3.8-flash');
+    const candidateModels = getGeminiCandidateModels(model || 'gemini-2.5-flash');
     let lastError: any = null;
     let streamStarted = false;
 
@@ -779,7 +785,8 @@ export async function handleChatStreamRequest(
           if (
             innerMsg.includes('invalid argument') ||
             innerMsg.includes('INVALID_ARGUMENT') ||
-            innerErr?.status === 400
+            innerErr?.status === 400 ||
+            innerMsg.includes('thinkingConfig')
           ) {
             responseStream = await ai.models.generateContentStream({
               model: activeModel,
@@ -835,7 +842,7 @@ export async function handleChatStreamRequest(
     throw new Error(parseApiErrorMessage(lastError));
   }
 
-  // 2. OpenAI-compatible endpoints: custom, openrouter, xkiro, nvidia, huggingface
+  // 2. OpenAI-compatible endpoints: custom, openrouter, xkiro, nvidia, huggingface, openai, grok, kimi, deepseek
   let endpoint = baseUrl?.trim();
   let defaultModel = model;
   const headers: Record<string, string> = {
@@ -908,7 +915,7 @@ export async function handleChatStreamRequest(
       formattedMessages.push({
         role: 'user',
         content: [
-          { type: 'text', text: m.content },
+          { type: 'text', text: m.content || ' ' },
           ...images.map((img) => ({
             type: 'image_url',
             image_url: { url: img },
@@ -1016,231 +1023,314 @@ export async function handleFetchModels(
   const safeBaseUrl = normalizeBaseUrl(baseUrl);
 
   // 1. xKiro (Moonshot / Kimi AI) live models
-  if (provider === 'xkiro') {
-    const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY;
+  if (provider === 'xkiro' || provider === 'kimi') {
+    const key = apiKey || process.env.XKIRO_API_KEY || process.env.MOONSHOT_API_KEY || process.env.KIMI_API_KEY;
     const endpoint = safeBaseUrl || 'https://api.moonshot.cn/v1';
 
     if (!key || !key.trim()) {
-      throw new Error(
-        'Please enter your xKiro / Moonshot API key (sk-...) to discover and fetch available models.'
-      );
+      return [];
     }
 
-    const modelsUrl = `${endpoint.replace(/\/+$/, '')}/models`;
-    const res = await fetch(modelsUrl, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${key.trim()}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    try {
+      const modelsUrl = `${endpoint.replace(/\/+$/, '')}/models`;
+      const res = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${key.trim()}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    if (!res.ok) {
-      let errMessage = res.statusText;
-      try {
-        const errJson = await res.json();
-        errMessage = errJson.error?.message || errJson.message || res.statusText;
-      } catch {}
-      throw new Error(`xKiro API Error (${res.status}): ${errMessage}`);
-    }
+      if (res.ok) {
+        const json = await res.json();
+        const dataList = json.data || json.models || (Array.isArray(json) ? json : []);
 
-    const json = await res.json();
-    const dataList = json.data || json.models || (Array.isArray(json) ? json : []);
+        return dataList.map((m: any) => {
+          const rawId: string = m.id || m.name || 'kimi-latest';
+          let contextLength = 128000;
+          if (rawId.includes('8k')) contextLength = 8192;
+          else if (rawId.includes('32k')) contextLength = 32768;
+          else if (rawId.includes('128k')) contextLength = 131072;
+          else if (rawId.includes('256k') || rawId.includes('2.6')) contextLength = 262144;
 
-    if (!dataList || dataList.length === 0) {
-      throw new Error('xKiro connected, but returned 0 models.');
-    }
+          const isReasoning =
+            rawId.includes('k1.5') ||
+            rawId.includes('r1') ||
+            rawId.includes('reason') ||
+            rawId.includes('thinking');
 
-    // Map real models from xKiro API - free only
-    return dataList.map((m: any) => {
-      const rawId: string = m.id || m.name || 'kimi-latest';
-      let contextLength = 128000;
-      if (rawId.includes('8k')) contextLength = 8192;
-      else if (rawId.includes('32k')) contextLength = 32768;
-      else if (rawId.includes('128k')) contextLength = 131072;
-      else if (rawId.includes('256k') || rawId.includes('2.6')) contextLength = 262144;
+          let displayName = rawId;
+          if (rawId.startsWith('moonshot-')) {
+            displayName = `Moonshot ${rawId.replace('moonshot-', '').toUpperCase()}`;
+          } else if (rawId.startsWith('kimi-')) {
+            displayName = `Kimi ${rawId.replace('kimi-', '').toUpperCase()}`;
+          }
 
-      const isReasoning =
-        rawId.includes('k1.5') ||
-        rawId.includes('r1') ||
-        rawId.includes('reason') ||
-        rawId.includes('thinking');
-
-      let displayName = rawId;
-      if (rawId.startsWith('moonshot-')) {
-        displayName = `Moonshot ${rawId.replace('moonshot-', '').toUpperCase()}`;
-      } else if (rawId.startsWith('kimi-')) {
-        displayName = `Kimi ${rawId.replace('kimi-', '').toUpperCase()}`;
+          return {
+            id: `${provider}-${rawId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            name: displayName,
+            provider,
+            description: `Official ${provider} model: ${rawId}. Free tier access with ${Math.round(
+              contextLength / 1024
+            )}k context window.`,
+            contextLength,
+            isFree: true,
+            category: (isReasoning ? 'reasoning' : 'general') as any,
+            providerModelId: rawId,
+            pricingDescription: `${provider} Access`,
+            tags: [provider, isReasoning ? 'Reasoning' : 'Chat'],
+            isUserSaved: true,
+          };
+        });
       }
-
-      return {
-        id: `xkiro-${rawId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-        name: displayName,
-        provider: 'xkiro' as ProviderType,
-        description: `Official xKiro model: ${rawId}. Free tier access with ${Math.round(
-          contextLength / 1024
-        )}k context window.`,
-        contextLength,
-        isFree: true,
-        category: isReasoning ? 'reasoning' : 'general',
-        providerModelId: rawId,
-        pricingDescription: 'xKiro Free Tier Access',
-        tags: ['xKiro', 'Free Tier', isReasoning ? 'Reasoning' : 'Chat'],
-        isUserSaved: true,
-      };
-    });
+    } catch {}
+    return [];
   }
 
   // 2. OpenRouter live models (free models only)
   if (provider === 'openrouter') {
-    const res = await fetch('https://openrouter.ai/api/v1/models');
-    if (!res.ok) {
-      throw new Error(`Failed to fetch OpenRouter models: ${res.statusText}`);
-    }
-    const json = await res.json();
-    const list: ModelInfo[] = [];
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/models');
+      if (res.ok) {
+        const json = await res.json();
+        const list: ModelInfo[] = [];
 
-    for (const item of json.data || []) {
-      const isFree =
-        item.id.endsWith(':free') ||
-        (item.pricing?.prompt === '0' && item.pricing?.completion === '0');
+        for (const item of json.data || []) {
+          const isFree =
+            item.id.endsWith(':free') ||
+            (item.pricing?.prompt === '0' && item.pricing?.completion === '0');
 
-      // User requested "but free only"
-      if (!isFree) continue;
+          if (!isFree) continue;
 
-      list.push({
-        id: `openrouter-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-        name: item.name || item.id,
-        provider: 'openrouter',
-        description: item.description || `Context: ${item.context_length || 'unknown'} tokens`,
-        contextLength: item.context_length || 32768,
-        isFree: true,
-        category: item.id.includes('vision')
-          ? 'vision'
-          : item.id.includes('code')
-          ? 'code'
-          : item.id.includes('r1') || item.id.includes('reason')
-          ? 'reasoning'
-          : 'general',
-        providerModelId: item.id,
-        pricingDescription: '100% Free (:free tier)',
-        tags: [
-          'Free',
-          item.id.split('/')[0],
-          `${Math.round((item.context_length || 32000) / 1024)}k Context`,
-        ],
-        isUserSaved: true,
-      });
-    }
+          list.push({
+            id: `openrouter-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            name: item.name || item.id,
+            provider: 'openrouter',
+            description: item.description || `Context: ${item.context_length || 'unknown'} tokens`,
+            contextLength: item.context_length || 32768,
+            isFree: true,
+            category: item.id.includes('vision')
+              ? 'vision'
+              : item.id.includes('code')
+              ? 'code'
+              : item.id.includes('r1') || item.id.includes('reason')
+              ? 'reasoning'
+              : 'general',
+            providerModelId: item.id,
+            pricingDescription: '100% Free (:free tier)',
+            tags: [
+              'Free',
+              item.id.split('/')[0],
+              `${Math.round((item.context_length || 32000) / 1024)}k Context`,
+            ],
+            isUserSaved: true,
+          });
+        }
 
-    return list;
+        return list;
+      }
+    } catch {}
+    return [];
   }
 
-  // 3. Gemini live models (free AI studio quota)
+  // 3. Gemini live models
   if (provider === 'gemini') {
     const key = apiKey || process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new Error('Gemini API key is required to fetch models.');
+      return [];
     }
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`
-    );
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(`Gemini API error: ${errJson.error?.message || res.statusText}`);
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        return (json.models || [])
+          .filter(
+            (m: any) =>
+              m.name.includes('gemini') &&
+              m.supportedGenerationMethods?.includes('generateContent') &&
+              !m.name.includes('vision')
+          )
+          .map((m: any) => {
+            const cleanId = m.name.replace('models/', '');
+            return {
+              id: `gemini-${cleanId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+              name: m.displayName || cleanId,
+              provider: 'gemini' as ProviderType,
+              description: m.description || 'Google DeepMind multimodal reasoning model',
+              contextLength: m.inputTokenLimit || 1048576,
+              isFree: true,
+              category: 'general' as const,
+              providerModelId: cleanId,
+              pricingDescription: 'Google AI Studio Tier',
+              tags: ['Gemini', 'Google AI'],
+              isUserSaved: true,
+            };
+          });
+      }
+    } catch {}
+    return [];
+  }
+
+  // 4. OpenAI live models
+  if (provider === 'openai') {
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (key) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/models', {
+          headers: { Authorization: `Bearer ${key.trim()}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const chatModels = (json.data || []).filter((m: any) =>
+            m.id.startsWith('gpt-') || m.id.startsWith('o1') || m.id.startsWith('o3') || m.id.startsWith('chatgpt-')
+          );
+          return chatModels.map((m: any) => ({
+            id: `openai-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            name: m.id.toUpperCase(),
+            provider: 'openai' as ProviderType,
+            description: `Official OpenAI model: ${m.id}`,
+            contextLength: 128000,
+            isFree: false,
+            category: (m.id.startsWith('o1') || m.id.startsWith('o3') ? 'reasoning' : 'general') as any,
+            providerModelId: m.id,
+            pricingDescription: 'OpenAI API Token Billing',
+            tags: ['OpenAI', m.id],
+            isUserSaved: true,
+          }));
+        }
+      } catch {}
     }
-    const json = await res.json();
-    return (json.models || [])
-      .filter(
-        (m: any) =>
-          m.name.includes('gemini') &&
-          m.supportedGenerationMethods?.includes('generateContent') &&
-          !m.name.includes('vision') // flash & pro are natively multimodal
-      )
-      .map((m: any) => {
-        const cleanId = m.name.replace('models/', '');
-        return {
-          id: `gemini-${cleanId.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-          name: m.displayName || cleanId,
-          provider: 'gemini' as ProviderType,
-          description: m.description || 'Google DeepMind multimodal reasoning model',
-          contextLength: m.inputTokenLimit || 1048576,
+  }
+
+  // 5. DeepSeek live models
+  if (provider === 'deepseek') {
+    const key = apiKey || process.env.DEEPSEEK_API_KEY;
+    if (key) {
+      try {
+        const res = await fetch('https://api.deepseek.com/v1/models', {
+          headers: { Authorization: `Bearer ${key.trim()}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return (json.data || []).map((m: any) => ({
+            id: `deepseek-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            name: m.id.toUpperCase(),
+            provider: 'deepseek' as ProviderType,
+            description: `DeepSeek official model: ${m.id}`,
+            contextLength: 65536,
+            isFree: false,
+            category: (m.id.includes('reason') || m.id.includes('r1') ? 'reasoning' : 'general') as any,
+            providerModelId: m.id,
+            pricingDescription: 'DeepSeek Official API',
+            tags: ['DeepSeek', 'Official'],
+            isUserSaved: true,
+          }));
+        }
+      } catch {}
+    }
+  }
+
+  // 6. Grok (xAI) live models
+  if (provider === 'grok') {
+    const key = apiKey || process.env.GROK_API_KEY || process.env.XAI_API_KEY;
+    if (key) {
+      try {
+        const res = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${key.trim()}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          return (json.data || []).map((m: any) => ({
+            id: `grok-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            name: m.id.toUpperCase(),
+            provider: 'grok' as ProviderType,
+            description: `xAI Grok model: ${m.id}`,
+            contextLength: 131072,
+            isFree: false,
+            category: (m.id.includes('vision') ? 'vision' : 'general') as any,
+            providerModelId: m.id,
+            pricingDescription: 'xAI Console API',
+            tags: ['xAI', 'Grok'],
+            isUserSaved: true,
+          }));
+        }
+      } catch {}
+    }
+  }
+
+  // 7. NVIDIA NIM live models
+  if (provider === 'nvidia' && apiKey) {
+    try {
+      const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey.trim()}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return (json.data || []).map((m: any) => ({
+          id: `nvidia-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+          name: m.id.split('/').pop()?.toUpperCase() || m.id,
+          provider: 'nvidia' as ProviderType,
+          description: `NVIDIA NIM accelerated model: ${m.id}`,
+          contextLength: 131072,
+          isFree: true,
+          category: (m.id.includes('r1') || m.id.includes('nemotron') ? 'reasoning' : 'general') as any,
+          providerModelId: m.id,
+          pricingDescription: 'NVIDIA Free Developer Credits',
+          tags: ['NVIDIA NIM', 'GPU Speed', 'Free Credits'],
+        }));
+      }
+    } catch {}
+  }
+
+  // 8. Hugging Face live models
+  if (provider === 'huggingface') {
+    try {
+      const res = await fetch(
+        'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=trending&direction=-1&limit=25'
+      );
+      if (res.ok) {
+        const json = await res.json();
+        return json.map((m: any) => ({
+          id: `hf-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+          name: m.id.split('/').pop() || m.id,
+          provider: 'huggingface' as ProviderType,
+          description: `Hugging Face model: ${m.id}. Downloads: ${m.downloads?.toLocaleString() || 0}`,
+          contextLength: 32768,
+          isFree: true,
+          category: (m.id.includes('R1') || m.id.includes('Reason') ? 'reasoning' : 'general') as any,
+          providerModelId: m.id,
+          pricingDescription: 'Serverless Inference Free Rate Limits',
+          tags: ['Hugging Face', 'Trending', 'Free Inference'],
+        }));
+      }
+    } catch {}
+  }
+
+  // 9. Custom endpoint live models
+  if (provider === 'custom' && safeBaseUrl) {
+    try {
+      const headers: Record<string, string> = {};
+      if (apiKey) headers.Authorization = `Bearer ${apiKey.trim()}`;
+      const res = await fetch(`${safeBaseUrl.replace(/\/+$/, '')}/models`, { headers });
+      if (res.ok) {
+        const json = await res.json();
+        return (json.data || []).map((m: any) => ({
+          id: `custom-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+          name: m.id,
+          provider: 'custom' as ProviderType,
+          description: `Custom model from ${safeBaseUrl}`,
+          contextLength: 32768,
           isFree: true,
           category: 'general' as const,
-          providerModelId: cleanId,
-          pricingDescription: 'Google AI Studio Free Tier (15 RPM)',
-          tags: ['Gemini', 'Google AI', 'Free Tier'],
-          isUserSaved: true,
-        };
-      });
+          providerModelId: m.id,
+          pricingDescription: 'Local / Custom Endpoint',
+          tags: ['Custom', 'Self-Hosted'],
+        }));
+      }
+    } catch {}
   }
 
-  // 4. NVIDIA NIM live models
-  if (provider === 'nvidia' && apiKey) {
-    const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (res.ok) {
-      const json = await res.json();
-      return (json.data || []).map((m: any) => ({
-        id: `nvidia-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-        name: m.id.split('/').pop()?.toUpperCase() || m.id,
-        provider: 'nvidia' as ProviderType,
-        description: `NVIDIA NIM accelerated model: ${m.id}`,
-        contextLength: 131072,
-        isFree: true,
-        category: m.id.includes('r1') || m.id.includes('nemotron') ? 'reasoning' : 'general',
-        providerModelId: m.id,
-        pricingDescription: 'NVIDIA Free Developer Credits',
-        tags: ['NVIDIA NIM', 'GPU Speed', 'Free Credits'],
-      }));
-    }
-  }
-
-  // 3. Hugging Face live models
-  if (provider === 'huggingface') {
-    const res = await fetch(
-      'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=trending&direction=-1&limit=25'
-    );
-    if (res.ok) {
-      const json = await res.json();
-      return json.map((m: any) => ({
-        id: `hf-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-        name: m.id.split('/').pop() || m.id,
-        provider: 'huggingface' as ProviderType,
-        description: `Hugging Face model: ${m.id}. Downloads: ${m.downloads?.toLocaleString() || 0}`,
-        contextLength: 32768,
-        isFree: true,
-        category: m.id.includes('R1') || m.id.includes('Reason') ? 'reasoning' : 'general',
-        providerModelId: m.id,
-        pricingDescription: 'Serverless Inference Free Rate Limits',
-        tags: ['Hugging Face', 'Trending', 'Free Inference'],
-      }));
-    }
-  }
-
-  // 4. Custom endpoint live models
-  if (provider === 'custom' && safeBaseUrl) {
-    const headers: Record<string, string> = {};
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const res = await fetch(`${safeBaseUrl.replace(/\/+$/, '')}/models`, { headers });
-    if (res.ok) {
-      const json = await res.json();
-      return (json.data || []).map((m: any) => ({
-        id: `custom-${m.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
-        name: m.id,
-        provider: 'custom' as ProviderType,
-        description: `Custom model from ${safeBaseUrl}`,
-        contextLength: 32768,
-        isFree: true,
-        category: 'general',
-        providerModelId: m.id,
-        pricingDescription: 'Local / Custom Endpoint',
-        tags: ['Custom', 'Self-Hosted'],
-      }));
-    }
-  }
-
-  // Fallback to default catalog for xKiro, Gemini, etc.
   return [];
 }
