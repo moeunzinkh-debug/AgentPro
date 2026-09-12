@@ -64,6 +64,7 @@ export interface ChatMessage {
   imageUrls?: string[];
   attachments?: AttachedFile[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
+  stopped?: boolean;
   errorMsg?: string;
   tokensUsed?: number;
 }
@@ -91,6 +92,12 @@ export interface ModelParameters {
   systemPreset: SystemPresetType;
   stream: boolean;
   enableReasoning: boolean;
+  /**
+   * Instant Mode for ALL models (on/off).
+   * When ON, every model answers with a direct, complete response
+   * (no progressive streaming). Gemini models always use Instant Mode.
+   */
+  instantMode: boolean;
 }
 
 export interface AppSettings {

@@ -299,7 +299,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                   Generation Hyperparameters
                 </h2>
                 <p className="text-xs text-white/60">
-                  Configure temperature, nucleus sampling (Top-P), context limits, and persona behavior.
+                  Configure temperature, nucleus sampling (Top-P), context limits, persona behavior,
+                  and Instant Mode for all models.
                 </p>
               </div>
               <button
@@ -308,6 +309,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
               >
                 <RotateCcw className="h-3 w-3" />
                 <span>Reset Defaults</span>
+              </button>
+            </div>
+
+            {/* Instant Mode ON/OFF — applies to ALL models (not only Gemini) */}
+            <div
+              className={`rounded-xl glass border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                settings.parameters.instantMode
+                  ? 'border-amber-500/50 bg-amber-500/[0.06] shadow-[0_0_18px_rgba(245,158,11,0.15)]'
+                  : 'border-white/10'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`p-2 rounded-lg border shrink-0 transition-colors ${
+                    settings.parameters.instantMode
+                      ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
+                      : 'bg-white/5 border-white/10 text-white/40'
+                  }`}
+                >
+                  <Zap
+                    className={`h-4 w-4 ${settings.parameters.instantMode ? 'fill-amber-300' : ''}`}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider font-bold text-white/85 flex items-center gap-2 flex-wrap">
+                    All Models (Instant Mode)
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors ${
+                        settings.parameters.instantMode
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-white/5 text-white/40 border-white/15'
+                      }`}
+                    >
+                      {settings.parameters.instantMode ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-white/40 mt-0.5 leading-relaxed">
+                    {settings.parameters.instantMode
+                      ? 'ON — គ្រប់ម៉ូឌែលទាំងអស់នឹងឆ្លើយតបភ្លាមៗជាចម្លើយពេញលេញ (All models reply instantly with complete responses — no progressive streaming).'
+                      : 'OFF — Non-Gemini models stream progressively. Gemini models always use Instant Mode.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.parameters.instantMode}
+                aria-label="Toggle Instant Mode for all models"
+                onClick={() => handleParamChange('instantMode', !settings.parameters.instantMode)}
+                className={`relative w-12 h-6 rounded-full border transition-all cursor-pointer shrink-0 self-start sm:self-auto ${
+                  settings.parameters.instantMode
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.45)]'
+                    : 'bg-white/10 border-white/20 hover:bg-white/15'
+                }`}
+              >
+                <span
+                  className={`absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full transition-all duration-200 ${
+                    settings.parameters.instantMode ? 'right-0.5 bg-black/90' : 'left-0.5 bg-white/60'
+                  }`}
+                />
               </button>
             </div>
 

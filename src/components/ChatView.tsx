@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Save,
   Sparkles,
+  Square,
   X,
   Zap,
 } from 'lucide-react';
@@ -54,6 +55,10 @@ interface ChatViewProps {
   }) => void;
   onOpenModelSelectionModal: () => void;
   isGenerating: boolean;
+  /** True when the active model answers in Instant Mode (all models or Gemini). */
+  instantMode: boolean;
+  /** Stop the in-flight response (បញ្ឈប់ការឆ្លើយតប). */
+  onStopResponse: () => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -69,6 +74,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onOpenSaveModelModal,
   onOpenModelSelectionModal,
   isGenerating,
+  instantMode,
+  onStopResponse,
 }) => {
   const [inputVal, setInputVal] = useState('');
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
@@ -442,7 +449,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   • {activeModel.provider}
                 </span>
               )}
-              {activeModel.provider === 'gemini' && (
+              {instantMode && (
                 <span className="text-[10px] text-amber-300 font-bold bg-amber-500/20 border border-amber-500/40 rounded px-1.5 py-0.5 hidden lg:flex shrink-0 items-center gap-1 shadow-[0_0_8px_rgba(245,158,11,0.2)]">
                   <Zap className="h-2.5 w-2.5 fill-amber-300" />
                   Instant Mode
@@ -795,23 +802,31 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       {/* Content */}
                       {isUser ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
-                      ) : !msg.content && !msg.errorMsg ? (
+                      ) : !msg.content && !msg.errorMsg && !msg.stopped ? (
                         <div className="flex items-center gap-2.5 py-1 text-cyan-300 text-xs font-mono">
                           <span className="flex h-2 w-2 relative">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                           </span>
                           <span>
-                            {activeModel.provider === 'gemini'
-                              ? '⚡ Gemini Instant Mode — Generating complete response...'
-                              : `${activeModel.name || 'Model'} is generating response...`}
+                            {instantMode
+                              ? '⚡ Instant Mode — កំពុងបង្កើតចម្លើយពេញលេញ (Generating complete response)...'
+                              : `${activeModel.name || 'Model'} កំពុងបង្កើតចម្លើយ... (is generating response...)`}
                           </span>
                         </div>
-                      ) : (
+                      ) : msg.content || msg.errorMsg ? (
                         <MarkdownView
                           content={msg.content}
                           isStreaming={isGenerating && idx === conversation.messages.length - 1}
                         />
+                      ) : null}
+
+                      {/* Stopped-by-user banner (បញ្ឈប់ការឆ្លើយតប) */}
+                      {!isUser && msg.stopped && (
+                        <div className="mt-2.5 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300/90 text-[11px] font-medium">
+                          <Square className="h-3 w-3 fill-current shrink-0" />
+                          <span>ការឆ្លើយតបត្រូវបានបញ្ឈប់ដោយអ្នក (Response stopped by user)</span>
+                        </div>
                       )}
 
                       {/* Error banner & Recovery Actions */}
@@ -1129,25 +1144,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
               className="w-full bg-transparent border-0 rounded-xl py-3 pl-12 pr-12 text-base sm:text-sm text-white placeholder-white/40 focus:outline-none transition-colors resize-none leading-relaxed max-h-44"
             />
 
-            {/* Send button with cyan glow & spinning response animation (🔃) */}
+            {/* Send button — morphs into a Stop button (បញ្ឈប់) while the
+                response is working, so the user can cancel it at any time. */}
             <button
               type="button"
-              onClick={() => handleSubmit()}
+              onClick={() => (isGenerating ? onStopResponse() : handleSubmit())}
               disabled={
-                (!inputVal.trim() && attachedImages.length === 0 && attachedFiles.length === 0) ||
-                isGenerating
+                !isGenerating &&
+                (!inputVal.trim() && attachedImages.length === 0 && attachedFiles.length === 0)
               }
               className={`absolute right-2.5 p-2 rounded-lg transition-all ${
                 isGenerating
-                  ? 'gradient-pill-active text-violet-100 cursor-wait'
+                  ? 'bg-rose-500/20 border border-rose-400/60 text-rose-300 hover:bg-rose-500/35 hover:text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.4)] cursor-pointer'
                   : inputVal.trim() || attachedImages.length > 0 || attachedFiles.length > 0
                   ? 'gradient-btn cursor-pointer'
                   : 'bg-white/5 text-white/30 cursor-not-allowed'
               }`}
-              title={isGenerating ? 'AI is responding... (កំពុងឆ្លើយតប)' : 'Send message (⬆️)'}
+              title={
+                isGenerating
+                  ? 'បញ្ឈប់ការឆ្លើយតប (Stop response)'
+                  : 'Send message (⬆️)'
+              }
             >
               {isGenerating ? (
-                <RefreshCw className="h-4 w-4 stroke-[2.5] animate-spin text-violet-200" />
+                <Square className="h-3.5 w-3.5 fill-current stroke-[2.5] animate-pulse" />
               ) : (
                 <ArrowUp className="h-4 w-4 stroke-[2.5]" />
               )}
@@ -1161,10 +1181,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 Active: <strong className="text-cyan-400 font-mono">{activeModel.name}</strong> (
                 {activeModel.isFree ? 'Free Tier' : 'API Key'})
               </span>
-              {activeModel.provider === 'gemini' && (
+              {instantMode && (
                 <span className="text-[10px] text-amber-300 font-bold bg-amber-500/20 border border-amber-500/40 rounded px-1.5 py-0.5 flex items-center gap-1 shadow-[0_0_6px_rgba(245,158,11,0.25)]">
                   <Zap className="h-2.5 w-2.5 fill-amber-300" />
-                  Instant Mode Only
+                  Instant Mode
                 </span>
               )}
             </div>
