@@ -34,7 +34,12 @@ import {
   saveSavedModelIds,
   saveSettings,
 } from './services/storage';
-import { sendChatMessage, sendChatMessageStream } from './services/apiClient';
+import {
+  sendChatMessage,
+  sendChatMessageStream,
+  type ChatApiResponse,
+  type StreamChunk,
+} from './services/apiClient';
 import { normalizeBaseUrl } from './utils/url';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
@@ -168,6 +173,11 @@ export default function App() {
   // Instant Mode: Gemini is always instant; the Settings → Model Parameters
   // "All Models (Instant Mode)" switch (or the legacy `stream: false` flag)
   // extends Instant Mode to every other model.
+  //
+  // Instant Mode STILL STREAMS: the reply is generated directly (zero thinking
+  // lag) but it is displayed progressively from the first token to the last —
+  // never buffered until the whole generation finishes, which wasted a lot of
+  // waiting time on long documents / long texts.
   const isInstantMode = useMemo(
     () =>
       activeModel.provider === 'gemini' ||
@@ -471,7 +481,9 @@ export default function App() {
       timestamp: Date.now() + 1,
       modelUsed: activeModel.name,
       providerUsed: activeModel.provider,
-      status: useInstantMode ? 'sending' : 'streaming',
+      // Instant Mode streams too — the reply shows up progressively from the
+      // first token (កុំរង់ចាំបង្កើតរួចរាល់ទាំងអស់ទើបបង្ហាញ)។
+      status: 'streaming',
     };
 
     // Append user message AND initial assistant message placeholder immediately
@@ -497,6 +509,114 @@ export default function App() {
     let streamReasoning = '';
     let streamRaf = 0;
 
+    // --- Progressive streaming plumbing (shared by Instant Mode and normal mode) ---
+    // Token chunks from the SSE reader are coalesced into at most ONE update
+    // per animation frame — updating state (and re-parsing markdown,
+    // re-scrolling, persisting) for every single token is what made the UI
+    // jank and jump on mobile.
+    //
+    // ADAPTIVE THROTTLE: short replies still update every frame (~60fps) so
+    // typing feels instant, but once a reply grows past STREAM_THROTTLE_AFTER
+    // chars we cap updates to ~STREAM_MIN_INTERVAL_MS. Re-rendering the whole
+    // growing markdown of a long reply on EVERY frame is what made long
+    // answers stutter and made the viewport fight the relayout while
+    // scrolling — it is purely client-side render cost, not the API/worker.
+    let lastChunkModel = '';
+    let lastStreamFlush = 0;
+    const STREAM_MIN_INTERVAL_MS = 40; // ≈25fps cap for long replies
+    const STREAM_THROTTLE_AFTER = 4000; // chars before the cap kicks in
+
+    const commitStreamedContent = () => {
+      lastStreamFlush = performance.now();
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === currentConvId) {
+            return {
+              ...c,
+              updatedAt: Date.now(),
+              messages: c.messages.map((m) => {
+                if (m.id === assistantMsgId) {
+                  return {
+                    ...m,
+                    content: streamContent,
+                    reasoning: streamReasoning || undefined,
+                    modelUsed: lastChunkModel || activeModel.name,
+                    status: 'streaming',
+                  };
+                }
+                return m;
+              }),
+            };
+          }
+          return c;
+        })
+      );
+    };
+
+    // Coalesce token chunks into a single frame update; for long replies,
+    // defer to the next frame until the min interval has elapsed so we never
+    // re-render a 20k-char markdown blob more than ~25 times per second.
+    const scheduleStreamFlush = () => {
+      const elapsed = performance.now() - lastStreamFlush;
+      const isLongReply = streamContent.length > STREAM_THROTTLE_AFTER;
+      if (!isLongReply || elapsed >= STREAM_MIN_INTERVAL_MS) {
+        streamRaf = 0;
+        commitStreamedContent();
+      } else {
+        streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
+      }
+    };
+
+    const handleStreamChunk = (chunk: StreamChunk) => {
+      if (chunk.content) streamContent += chunk.content;
+      if (chunk.reasoning) streamReasoning += chunk.reasoning;
+      if (chunk.model) lastChunkModel = chunk.model;
+
+      if (!streamRaf) {
+        streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
+      }
+    };
+
+    // The final "complete" update carries the full buffer, so any
+    // still-scheduled frame flush is redundant — cancel it.
+    const cancelPendingStreamFlush = () => {
+      if (streamRaf) {
+        window.cancelAnimationFrame(streamRaf);
+        streamRaf = 0;
+      }
+    };
+
+    // Mark the assistant message complete with the final (streamed — or, for
+    // the Instant Mode non-stream fallback, direct) content of `response`.
+    const finalizeAssistantMessage = (response: ChatApiResponse) => {
+      cancelPendingStreamFlush();
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id === currentConvId) {
+            return {
+              ...c,
+              updatedAt: Date.now(),
+              messages: c.messages.map((m) => {
+                if (m.id === assistantMsgId) {
+                  return {
+                    ...m,
+                    content: streamContent || response.content,
+                    reasoning: streamReasoning || response.reasoning,
+                    status: 'complete',
+                    modelUsed: response.modelUsed || lastChunkModel || activeModel.name,
+                    providerUsed: response.providerUsed || activeModel.provider,
+                    tokensUsed: response.tokensUsed,
+                  };
+                }
+                return m;
+              }),
+            };
+          }
+          return c;
+        })
+      );
+    };
+
     try {
       // If code/text/pdf files are attached, include their content in prompt for the model
       let promptText = text;
@@ -521,160 +641,51 @@ export default function App() {
         { role: 'user' as const, content: promptText },
       ];
 
+      const chatRequest = {
+        provider: activeModel.provider,
+        modelId: activeModel.id,
+        providerModelId: activeModel.providerModelId,
+        messages: chatHistory,
+        parameters: requestParams,
+        images,
+        providerConfig: activeProviderConfig,
+      };
+
+      // Instant Mode: ឆ្លើយតបដោយផ្ទាល់ (zero thinking lag) ប៉ុន្តែនៅតែ STREAMING —
+      // the reply is displayed progressively from the first token to the last
+      // instead of being generated in full first and only then shown, which
+      // wasted waiting time on long documents / long texts.
       if (useInstantMode) {
-        // Instant Mode: Complete direct generation without progressive streaming delay
-        const response = await sendChatMessage(
-          {
-            provider: activeModel.provider,
-            modelId: activeModel.id,
-            providerModelId: activeModel.providerModelId,
-            messages: chatHistory,
-            parameters: requestParams,
-            images,
-            providerConfig: activeProviderConfig,
-          },
-          abortController.signal
-        );
-
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id === currentConvId) {
-              return {
-                ...c,
-                updatedAt: Date.now(),
-                messages: c.messages.map((m) => {
-                  if (m.id === assistantMsgId) {
-                    return {
-                      ...m,
-                      content: response.content,
-                      reasoning: response.reasoning,
-                      status: 'complete',
-                      modelUsed: response.modelUsed || activeModel.name,
-                      providerUsed: response.providerUsed || activeModel.provider,
-                      tokensUsed: response.tokensUsed,
-                    };
-                  }
-                  return m;
-                }),
-              };
-            }
-            return c;
-          })
-        );
-      } else {
-        // Progressive streaming for other providers when stream is enabled
-        let lastChunkModel = '';
-        let lastStreamFlush = 0;
-
-        // Apply the accumulated stream buffer to state. Token chunks from the
-        // SSE reader are coalesced into at most ONE update per animation frame —
-        // updating state (and re-parsing markdown, re-scrolling, persisting)
-        // for every single token is what made the UI jank and jump on mobile.
-        //
-        // ADAPTIVE THROTTLE: short replies still update every frame (~60fps) so
-        // typing feels instant, but once a reply grows past STREAM_THROTTLE_AFTER
-        // chars we cap updates to ~STREAM_MIN_INTERVAL_MS. Re-rendering the whole
-        // growing markdown of a long reply on EVERY frame is what made long
-        // answers stutter and made the viewport fight the relayout while
-        // scrolling — it is purely client-side render cost, not the API/worker.
-        const STREAM_MIN_INTERVAL_MS = 40; // ≈25fps cap for long replies
-        const STREAM_THROTTLE_AFTER = 4000; // chars before the cap kicks in
-
-        const commitStreamedContent = () => {
-          lastStreamFlush = performance.now();
-          setConversations((prev) =>
-            prev.map((c) => {
-              if (c.id === currentConvId) {
-                return {
-                  ...c,
-                  updatedAt: Date.now(),
-                  messages: c.messages.map((m) => {
-                    if (m.id === assistantMsgId) {
-                      return {
-                        ...m,
-                        content: streamContent,
-                        reasoning: streamReasoning || undefined,
-                        modelUsed: lastChunkModel || activeModel.name,
-                        status: 'streaming',
-                      };
-                    }
-                    return m;
-                  }),
-                };
-              }
-              return c;
-            })
+        try {
+          const response = await sendChatMessageStream(
+            chatRequest,
+            handleStreamChunk,
+            abortController.signal
           );
-        };
-
-        // Coalesce token chunks into a single frame update; for long replies,
-        // defer to the next frame until the min interval has elapsed so we never
-        // re-render a 20k-char markdown blob more than ~25 times per second.
-        const scheduleStreamFlush = () => {
-          const elapsed = performance.now() - lastStreamFlush;
-          const isLongReply = streamContent.length > STREAM_THROTTLE_AFTER;
-          if (!isLongReply || elapsed >= STREAM_MIN_INTERVAL_MS) {
-            streamRaf = 0;
-            commitStreamedContent();
-          } else {
-            streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
+          finalizeAssistantMessage(response);
+        } catch (streamErr: any) {
+          const streamAborted =
+            abortController.signal.aborted || streamErr?.name === 'AbortError';
+          // Content already streamed (or the user stopped the response): keep
+          // the partial reply and let the outer handler finish the job —
+          // there is nothing to fall back to.
+          if (streamAborted || streamContent) {
+            throw streamErr;
           }
-        };
-
+          // The endpoint could not stream at all (e.g. a custom
+          // OpenAI-compatible server without SSE support) — fall back to ONE
+          // direct complete generation so the user still gets an answer.
+          const response = await sendChatMessage(chatRequest, abortController.signal);
+          finalizeAssistantMessage(response);
+        }
+      } else {
+        // Progressive streaming (normal mode)
         const response = await sendChatMessageStream(
-          {
-            provider: activeModel.provider,
-            modelId: activeModel.id,
-            providerModelId: activeModel.providerModelId,
-            messages: chatHistory,
-            parameters: requestParams,
-            images,
-            providerConfig: activeProviderConfig,
-          },
-          (chunk) => {
-            if (chunk.content) streamContent += chunk.content;
-            if (chunk.reasoning) streamReasoning += chunk.reasoning;
-            if (chunk.model) lastChunkModel = chunk.model;
-
-            if (!streamRaf) {
-              streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
-            }
-          },
+          chatRequest,
+          handleStreamChunk,
           abortController.signal
         );
-
-        // The final "complete" update below carries the full buffer, so any
-        // still-scheduled frame flush is redundant — cancel it.
-        if (streamRaf) {
-          window.cancelAnimationFrame(streamRaf);
-          streamRaf = 0;
-        }
-
-        // Mark completed
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id === currentConvId) {
-              return {
-                ...c,
-                updatedAt: Date.now(),
-                messages: c.messages.map((m) => {
-                  if (m.id === assistantMsgId) {
-                    return {
-                      ...m,
-                      content: streamContent || response.content,
-                      reasoning: streamReasoning || response.reasoning,
-                      status: 'complete',
-                      modelUsed: response.modelUsed || activeModel.name,
-                      providerUsed: response.providerUsed || activeModel.provider,
-                    };
-                  }
-                  return m;
-                }),
-              };
-            }
-            return c;
-          })
-        );
+        finalizeAssistantMessage(response);
       }
     } catch (err: any) {
       // បញ្ឈប់ការឆ្លើយតប — user pressed Stop while the model was working.

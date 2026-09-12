@@ -55,7 +55,11 @@ interface ChatViewProps {
   }) => void;
   onOpenModelSelectionModal: () => void;
   isGenerating: boolean;
-  /** True when the active model answers in Instant Mode (all models or Gemini). */
+  /**
+   * True when the active model answers in Instant Mode (all models or Gemini).
+   * The reply still streams progressively — Instant Mode only skips thinking
+   * lag; it never waits for the full generation before displaying.
+   */
   instantMode: boolean;
   /** Stop the in-flight response (បញ្ឈប់ការឆ្លើយតប). */
   onStopResponse: () => void;
@@ -810,7 +814,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </span>
                           <span>
                             {instantMode
-                              ? '⚡ Instant Mode — កំពុងបង្កើតចម្លើយពេញលេញ (Generating complete response)...'
+                              ? '⚡ Instant Mode — កំពុងបង្ហាញចម្លើយបន្តបន្ទាប់ពីដើមដល់ចប់ (streaming response live)...'
                               : `${activeModel.name || 'Model'} កំពុងបង្កើតចម្លើយ... (is generating response...)`}
                           </span>
                         </div>
