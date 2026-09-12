@@ -94,8 +94,10 @@ export interface ModelParameters {
   enableReasoning: boolean;
   /**
    * Instant Mode for ALL models (on/off).
-   * When ON, every model answers with a direct, complete response
-   * (no progressive streaming). Gemini models always use Instant Mode.
+   * When ON, every model answers directly (zero thinking lag) while the reply
+   * is still displayed progressively — streamed from the first token to the
+   * last, never buffered until fully generated.
+   * Gemini models always use Instant Mode.
    */
   instantMode: boolean;
 }

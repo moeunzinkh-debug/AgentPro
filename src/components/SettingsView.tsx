@@ -347,8 +347,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                   </div>
                   <div className="text-[10px] text-white/40 mt-0.5 leading-relaxed">
                     {settings.parameters.instantMode
-                      ? 'ON — គ្រប់ម៉ូឌែលទាំងអស់នឹងឆ្លើយតបភ្លាមៗជាចម្លើយពេញលេញ (All models reply instantly with complete responses — no progressive streaming).'
-                      : 'OFF — Non-Gemini models stream progressively. Gemini models always use Instant Mode.'}
+                      ? 'ON — គ្រប់ម៉ូដែលឆ្លើយតបភ្លាមៗ ហើយចម្លើយត្រូវបង្ហាញជាលំដាប់ពីដើមរហូតដល់ចប់ (All models reply instantly — the response streams progressively from start to finish).'
+                      : 'OFF — Non-Gemini models use standard streaming generation. Gemini models always use Instant Mode.'}
                   </div>
                 </div>
               </div>
@@ -544,7 +544,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, setSetting
                     Gemini Generation Mode
                   </div>
                   <div className="text-[10px] text-white/50 mt-0.5">
-                    Configured to <strong className="text-amber-300">Instant Mode Only</strong> (zero thinking lag, direct complete response).
+                    Configured to <strong className="text-amber-300">Instant Mode Only</strong> (zero thinking lag — the response streams live from start to finish).
                   </div>
                 </div>
                 <div className="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
