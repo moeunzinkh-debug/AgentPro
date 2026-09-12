@@ -27,6 +27,7 @@ If asked to analyze complex issues, provide methodical step-by-step reasoning.`,
     systemPreset: 'agent-pro',
     stream: true,
     enableReasoning: true,
+    instantMode: false,
   },
 };
 
@@ -34,7 +35,17 @@ export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (raw) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      // Deep-merge parameters so settings saved by older builds (without new
+      // fields like `instantMode`) still pick up the current defaults.
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        parameters: {
+          ...DEFAULT_SETTINGS.parameters,
+          ...(parsed?.parameters || {}),
+        },
+      };
     }
   } catch (e) {
     console.warn('Failed to load settings:', e);

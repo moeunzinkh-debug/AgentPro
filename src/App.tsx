@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle } from 'lucide-react';
 import {
   AppSettings,
@@ -11,6 +11,7 @@ import {
   ChatMessage,
   Conversation,
   ModelInfo,
+  ModelParameters,
   NavTab,
   ProviderConfig,
   ProviderType,
@@ -44,6 +45,13 @@ import { HistoryDrawer } from './components/HistoryDrawer';
 import { SaveModelModal } from './components/SaveModelModal';
 import { ModelSelectionModal } from './components/ModelSelectionModal';
 
+/**
+ * គ្រប់ចម្លើយត្រូវតែជាភាសាខ្មែរ — every AI reply must ALWAYS be in Khmer,
+ * appended to the system prompt on every request regardless of preset.
+ */
+const KHMER_LANGUAGE_RULE =
+  'IMPORTANT LANGUAGE RULE: You must ALWAYS respond in Khmer (ភាសាខ្មែរ) in every single reply, even if the user writes in English or another language.';
+
 export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState<NavTab>('chat');
@@ -69,6 +77,10 @@ export default function App() {
   // UI state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Abort controller for the in-flight chat request so the user can press
+  // "Stop response" (បញ្ឈប់ការឆ្លើយតប) while the model is working.
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Save Model Modal State
   const [isSaveModelModalOpen, setIsSaveModelModalOpen] = useState(false);
@@ -152,6 +164,26 @@ export default function App() {
       baseUrl: activeModel.customBaseUrl || baseConfig?.baseUrl || '',
     };
   }, [providers, activeModel]);
+
+  // Instant Mode: Gemini is always instant; the Settings → Model Parameters
+  // "All Models (Instant Mode)" switch (or the legacy `stream: false` flag)
+  // extends Instant Mode to every other model.
+  const isInstantMode = useMemo(
+    () =>
+      activeModel.provider === 'gemini' ||
+      settings.parameters.instantMode ||
+      !settings.parameters.stream,
+    [
+      activeModel.provider,
+      settings.parameters.instantMode,
+      settings.parameters.stream,
+    ]
+  );
+
+  // Stop the in-flight response (បញ្ឈប់ការឆ្លើយតប)
+  const handleStopResponse = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   // Open Model Selection Modal (Dynamic Discovery)
   const handleOpenModelSelectionModal = (provider: ProviderType = 'custom') => {
@@ -414,8 +446,21 @@ export default function App() {
       ? titleBase.slice(0, 32) + (titleBase.length > 32 ? '...' : '')
       : currentConversation.title;
 
-    const isGemini = activeModel.provider === 'gemini';
-    const useInstantMode = isGemini || !settings.parameters.stream;
+    const useInstantMode = isInstantMode;
+
+    // Allow the user to stop this response while it is working.
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // ត្រឹមត្រូវឆ្លើយតបជាភាសាខ្មែរជានិច្ច — the Khmer language rule is
+    // always appended to the system prompt for every request.
+    const requestParams: ModelParameters = {
+      ...settings.parameters,
+      systemPrompt:
+        (settings.parameters.systemPrompt.trim()
+          ? settings.parameters.systemPrompt.trimEnd() + '\n\n'
+          : '') + KHMER_LANGUAGE_RULE,
+    };
 
     const assistantMsgId = 'msg-asst-' + (Date.now() + 1);
     const initialAssistantMsg: ChatMessage = {
@@ -446,6 +491,12 @@ export default function App() {
 
     setIsGenerating(true);
 
+    // Hoisted so the abort handler can keep whatever partial content was
+    // already received when the user stops a progressive stream.
+    let streamContent = '';
+    let streamReasoning = '';
+    let streamRaf = 0;
+
     try {
       // If code/text/pdf files are attached, include their content in prompt for the model
       let promptText = text;
@@ -472,15 +523,18 @@ export default function App() {
 
       if (useInstantMode) {
         // Instant Mode: Complete direct generation without progressive streaming delay
-        const response = await sendChatMessage({
-          provider: activeModel.provider,
-          modelId: activeModel.id,
-          providerModelId: activeModel.providerModelId,
-          messages: chatHistory,
-          parameters: settings.parameters,
-          images,
-          providerConfig: activeProviderConfig,
-        });
+        const response = await sendChatMessage(
+          {
+            provider: activeModel.provider,
+            modelId: activeModel.id,
+            providerModelId: activeModel.providerModelId,
+            messages: chatHistory,
+            parameters: requestParams,
+            images,
+            providerConfig: activeProviderConfig,
+          },
+          abortController.signal
+        );
 
         setConversations((prev) =>
           prev.map((c) => {
@@ -509,10 +563,7 @@ export default function App() {
         );
       } else {
         // Progressive streaming for other providers when stream is enabled
-        let streamContent = '';
-        let streamReasoning = '';
         let lastChunkModel = '';
-        let streamRaf = 0;
         let lastStreamFlush = 0;
 
         // Apply the accumulated stream buffer to state. Token chunks from the
@@ -576,7 +627,7 @@ export default function App() {
             modelId: activeModel.id,
             providerModelId: activeModel.providerModelId,
             messages: chatHistory,
-            parameters: settings.parameters,
+            parameters: requestParams,
             images,
             providerConfig: activeProviderConfig,
           },
@@ -588,7 +639,8 @@ export default function App() {
             if (!streamRaf) {
               streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
             }
-          }
+          },
+          abortController.signal
         );
 
         // The final "complete" update below carries the full buffer, so any
@@ -625,6 +677,18 @@ export default function App() {
         );
       }
     } catch (err: any) {
+      // បញ្ឈប់ការឆ្លើយតប — user pressed Stop while the model was working.
+      // Keep any partial content already received and mark the message as
+      // stopped instead of showing an error banner.
+      const wasAborted =
+        abortController.signal.aborted || err?.name === 'AbortError';
+
+      // A still-scheduled frame flush must not overwrite the stopped state.
+      if (streamRaf) {
+        window.cancelAnimationFrame(streamRaf);
+        streamRaf = 0;
+      }
+
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id === currentConvId) {
@@ -633,6 +697,16 @@ export default function App() {
               updatedAt: Date.now(),
               messages: c.messages.map((m) => {
                 if (m.id === assistantMsgId) {
+                  if (wasAborted) {
+                    return {
+                      ...m,
+                      content: streamContent || m.content || '',
+                      reasoning: streamReasoning || m.reasoning || undefined,
+                      stopped: true,
+                      errorMsg: undefined,
+                      status: 'complete',
+                    };
+                  }
                   return {
                     ...m,
                     content: m.content || `Error: Unable to complete request with ${activeModel.name}.`,
@@ -648,6 +722,7 @@ export default function App() {
         })
       );
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
     }
   };
@@ -712,6 +787,8 @@ export default function App() {
             onOpenSaveModelModal={handleOpenSaveModelModal}
             onOpenModelSelectionModal={handleOpenModelSelectionModal}
             isGenerating={isGenerating}
+            instantMode={isInstantMode}
+            onStopResponse={handleStopResponse}
           />
         )}
 

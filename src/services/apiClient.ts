@@ -157,7 +157,10 @@ export async function sendChatMessageStream(
   };
 }
 
-export async function sendChatMessage(req: ChatApiRequest): Promise<ChatApiResponse> {
+export async function sendChatMessage(
+  req: ChatApiRequest,
+  signal?: AbortSignal
+): Promise<ChatApiResponse> {
   const { provider, providerModelId, messages, parameters, images, providerConfig } = req;
   const safeBaseUrl = normalizeBaseUrl(providerConfig.baseUrl);
 
@@ -167,6 +170,7 @@ export async function sendChatMessage(req: ChatApiRequest): Promise<ChatApiRespo
       headers: {
         'Content-Type': 'application/json',
       },
+      signal,
       body: JSON.stringify({
         provider,
         model: providerModelId,
@@ -197,6 +201,13 @@ export async function sendChatMessage(req: ChatApiRequest): Promise<ChatApiRespo
       tokensUsed: data.tokensUsed,
     };
   } catch (err: any) {
+    // User-initiated stop (បញ្ឈប់ការឆ្លើយតប): never run the direct-client
+    // fallback or mask the abort — propagate it so the UI can mark the
+    // message as stopped with whatever partial content was received.
+    if (signal?.aborted || err?.name === 'AbortError') {
+      throw err;
+    }
+
     // Check if direct client fallback is possible for OpenRouter or HuggingFace
     if (provider === 'openrouter' && providerConfig.apiKey) {
       try {
