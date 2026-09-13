@@ -15,6 +15,7 @@ import {
   FileCode,
   FileText,
   Image as ImageIcon,
+  Info,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -683,6 +684,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             {conversation.messages.map((msg, idx) => {
               const isUser = msg.role === 'user';
               const isReasoningExpanded = expandedReasoning[msg.id] ?? false;
+              // True only for the assistant bubble currently being streamed —
+              // drives the live character counter that proves the reply is
+              // painting progressively (not buffered until fully generated).
+              const isStreamingNow =
+                !isUser &&
+                isGenerating &&
+                idx === conversation.messages.length - 1 &&
+                msg.status === 'streaming';
 
               return (
                 <div
@@ -819,11 +828,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </span>
                         </div>
                       ) : msg.content || msg.errorMsg ? (
-                        <MarkdownView
-                          content={msg.content}
-                          isStreaming={isGenerating && idx === conversation.messages.length - 1}
-                        />
+                        <>
+                          <MarkdownView
+                            content={msg.content}
+                            isStreaming={isStreamingNow}
+                          />
+                          {/* Live character counter — visible proof the reply is
+                              streaming progressively from the first token, not
+                              buffered until the whole generation finishes. */}
+                          {isStreamingNow && (
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-cyan-400/70">
+                              <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                              <span>{msg.content.length.toLocaleString()} តួអក្សរ · live</span>
+                            </div>
+                          )}
+                        </>
                       ) : null}
+
+                      {/* Server status note (config retry / non-streaming upstream) */}
+                      {!isUser && msg.statusNote && !msg.errorMsg && (
+                        <div className="mt-2 flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/5 border border-cyan-500/20 text-[10px] text-cyan-200/70 leading-relaxed">
+                          <Info className="h-3 w-3 shrink-0 mt-0.5 text-cyan-400/70" />
+                          <span>{msg.statusNote}</span>
+                        </div>
+                      )}
 
                       {/* Stopped-by-user banner (បញ្ឈប់ការឆ្លើយតប) */}
                       {!isUser && msg.stopped && (

@@ -12,7 +12,12 @@
     "lint": "tsc --noEmit",
     "dev:worker": "wrangler dev --ip 0.0.0.0 --port 8787",
     "deploy": "wrangler deploy",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:streaming": "node scripts/verify-streaming.mjs && node scripts/verify-stream-painter.mjs",
+    "test:dom": "node scripts/verify-dom-streaming.mjs",
+    "test:server": "node scripts/verify-streaming.mjs",
+    "test:painter": "node scripts/verify-stream-painter.mjs",
+    "diag:gemini-latency": "node scripts/repro-gemini-latency.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -32,6 +37,7 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

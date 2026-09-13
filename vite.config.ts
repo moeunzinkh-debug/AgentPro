@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig, Plugin} from 'vite';
 import dotenv from 'dotenv';
 import { handleChatRequest, handleChatStreamRequest, handleFetchModels, parseApiErrorMessage } from './src/server/apiRouter';
+import { createSseWriter } from './src/server/sse';
 import { UI_BUILD_DATE, UI_THEME, UI_VERSION } from './src/uiVersion';
 
 dotenv.config();
@@ -34,24 +35,33 @@ function apiServerPlugin(): Plugin {
 
             const streamRequested = isStreamQuery || body.stream === true;
             if (streamRequested) {
-              res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-              res.setHeader('Cache-Control', 'no-cache, no-transform');
-              res.setHeader('Connection', 'keep-alive');
-              if (typeof (res as any).flushHeaders === 'function') {
-                (res as any).flushHeaders();
-              }
+              // createSseWriter sets the anti-buffering headers, disables Nagle,
+              // opens the stream immediately and keeps it hot with a heartbeat,
+              // so every token reaches the browser the instant it is produced.
+              const sse = createSseWriter(res as any);
+
+              // Forward client disconnect (Stop / navigate away) upstream so we
+              // never keep generating tokens nobody will read.
+              const abortController = new AbortController();
+              res.on('close', () => {
+                if (!res.writableEnded) abortController.abort();
+              });
 
               try {
-                await handleChatStreamRequest(body, (chunk) => {
-                  res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-                });
-                res.write('data: [DONE]\n\n');
-                res.end();
+                await handleChatStreamRequest(
+                  body,
+                  (chunk) => sse.write(chunk),
+                  abortController.signal
+                );
+                sse.end();
               } catch (err: any) {
+                if (abortController.signal.aborted || sse.isClosed()) {
+                  return; // client went away — nothing to report
+                }
                 const cleanMsg = parseApiErrorMessage(err);
                 console.error('Streaming error in vite middleware:', cleanMsg);
-                res.write(`data: ${JSON.stringify({ error: cleanMsg })}\n\n`);
-                res.end();
+                sse.write({ error: cleanMsg });
+                sse.end();
               }
             } else {
               try {

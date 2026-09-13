@@ -35,11 +35,13 @@ import {
   saveSettings,
 } from './services/storage';
 import {
+  ChatStreamFailedError,
   sendChatMessage,
   sendChatMessageStream,
   type ChatApiResponse,
   type StreamChunk,
 } from './services/apiClient';
+import { createStreamPainter, type StreamPainter } from './services/streamPainter';
 import { normalizeBaseUrl } from './utils/url';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
@@ -507,27 +509,17 @@ export default function App() {
     // already received when the user stops a progressive stream.
     let streamContent = '';
     let streamReasoning = '';
-    let streamRaf = 0;
+    let streamStatusNote = '';
+    let lastChunkModel = '';
 
     // --- Progressive streaming plumbing (shared by Instant Mode and normal mode) ---
-    // Token chunks from the SSE reader are coalesced into at most ONE update
-    // per animation frame — updating state (and re-parsing markdown,
-    // re-scrolling, persisting) for every single token is what made the UI
-    // jank and jump on mobile.
-    //
-    // ADAPTIVE THROTTLE: short replies still update every frame (~60fps) so
-    // typing feels instant, but once a reply grows past STREAM_THROTTLE_AFTER
-    // chars we cap updates to ~STREAM_MIN_INTERVAL_MS. Re-rendering the whole
-    // growing markdown of a long reply on EVERY frame is what made long
-    // answers stutter and made the viewport fight the relayout while
-    // scrolling — it is purely client-side render cost, not the API/worker.
-    let lastChunkModel = '';
-    let lastStreamFlush = 0;
-    const STREAM_MIN_INTERVAL_MS = 40; // ≈25fps cap for long replies
-    const STREAM_THROTTLE_AFTER = 4000; // chars before the cap kicks in
-
+    // Token chunks are committed through the stream painter: the FIRST token
+    // paints immediately and every later commit is scheduled with rAF *and* a
+    // setTimeout watchdog, so a hidden tab / dimmed phone / off-screen preview
+    // iframe (where rAF never fires) can no longer buffer the whole reply and
+    // dump it in one jump. Commits are coalesced and throttled as the reply
+    // grows, because each one re-parses the whole markdown.
     const commitStreamedContent = () => {
-      lastStreamFlush = performance.now();
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id === currentConvId) {
@@ -540,6 +532,7 @@ export default function App() {
                     ...m,
                     content: streamContent,
                     reasoning: streamReasoning || undefined,
+                    statusNote: streamStatusNote || undefined,
                     modelUsed: lastChunkModel || activeModel.name,
                     status: 'streaming',
                   };
@@ -553,43 +546,59 @@ export default function App() {
       );
     };
 
-    // Coalesce token chunks into a single frame update; for long replies,
-    // defer to the next frame until the min interval has elapsed so we never
-    // re-render a 20k-char markdown blob more than ~25 times per second.
-    const scheduleStreamFlush = () => {
-      const elapsed = performance.now() - lastStreamFlush;
-      const isLongReply = streamContent.length > STREAM_THROTTLE_AFTER;
-      if (!isLongReply || elapsed >= STREAM_MIN_INTERVAL_MS) {
-        streamRaf = 0;
-        commitStreamedContent();
-      } else {
-        streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
-      }
-    };
+    const painter: StreamPainter = createStreamPainter({
+      onCommit: commitStreamedContent,
+      getBufferLength: () => streamContent.length + streamReasoning.length,
+    });
 
     const handleStreamChunk = (chunk: StreamChunk) => {
       if (chunk.content) streamContent += chunk.content;
       if (chunk.reasoning) streamReasoning += chunk.reasoning;
+      if (chunk.status) streamStatusNote = chunk.status;
       if (chunk.model) lastChunkModel = chunk.model;
-
-      if (!streamRaf) {
-        streamRaf = window.requestAnimationFrame(scheduleStreamFlush);
-      }
+      painter.push();
     };
 
-    // The final "complete" update carries the full buffer, so any
-    // still-scheduled frame flush is redundant — cancel it.
-    const cancelPendingStreamFlush = () => {
-      if (streamRaf) {
-        window.cancelAnimationFrame(streamRaf);
-        streamRaf = 0;
-      }
-    };
-
-    // Mark the assistant message complete with the final (streamed — or, for
-    // the Instant Mode non-stream fallback, direct) content of `response`.
+    // Mark the assistant message complete with the final streamed (or, for the
+    // non-stream fallback, direct) content of `response`.
     const finalizeAssistantMessage = (response: ChatApiResponse) => {
-      cancelPendingStreamFlush();
+      painter.cancel();
+      const finalContent = streamContent || response.content || '';
+      const finalReasoning = streamReasoning || response.reasoning || '';
+      const finalNote = streamStatusNote || response.statusNote || '';
+
+      // An empty generation must never leave the bubble stuck on the spinner:
+      // report it as an error so the Retry path is available.
+      if (!finalContent.trim() && !finalReasoning.trim()) {
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (c.id === currentConvId) {
+              return {
+                ...c,
+                updatedAt: Date.now(),
+                messages: c.messages.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        content: '',
+                        reasoning: undefined,
+                        status: 'error',
+                        statusNote: finalNote || undefined,
+                        errorMsg:
+                          'ម៉ូដែលបានវិលត្រឡប់មកវិញដោយគ្មានអត្ថបទទេ (the model returned no text). សូមចុច Retry ឬជ្រើសរើសម៉ូដែលផ្សេង។',
+                        modelUsed: response.modelUsed || lastChunkModel || activeModel.name,
+                        providerUsed: response.providerUsed || activeModel.provider,
+                      }
+                    : m
+                ),
+              };
+            }
+            return c;
+          })
+        );
+        return;
+      }
+
       setConversations((prev) =>
         prev.map((c) => {
           if (c.id === currentConvId) {
@@ -600,8 +609,9 @@ export default function App() {
                 if (m.id === assistantMsgId) {
                   return {
                     ...m,
-                    content: streamContent || response.content,
-                    reasoning: streamReasoning || response.reasoning,
+                    content: finalContent,
+                    reasoning: finalReasoning || undefined,
+                    statusNote: finalNote || undefined,
                     status: 'complete',
                     modelUsed: response.modelUsed || lastChunkModel || activeModel.name,
                     providerUsed: response.providerUsed || activeModel.provider,
@@ -649,43 +659,40 @@ export default function App() {
         parameters: requestParams,
         images,
         providerConfig: activeProviderConfig,
+        // Instant Mode is forwarded to the SERVER so it disables the thinking
+        // phase (first token after one round trip) — but the reply still
+        // streams progressively from the first token to the last.
+        instantMode: useInstantMode,
       };
 
-      // Instant Mode: ឆ្លើយតបដោយផ្ទាល់ (zero thinking lag) ប៉ុន្តែនៅតែ STREAMING —
-      // the reply is displayed progressively from the first token to the last
-      // instead of being generated in full first and only then shown, which
-      // wasted waiting time on long documents / long texts.
-      if (useInstantMode) {
-        try {
-          const response = await sendChatMessageStream(
-            chatRequest,
-            handleStreamChunk,
-            abortController.signal
-          );
-          finalizeAssistantMessage(response);
-        } catch (streamErr: any) {
-          const streamAborted =
-            abortController.signal.aborted || streamErr?.name === 'AbortError';
-          // Content already streamed (or the user stopped the response): keep
-          // the partial reply and let the outer handler finish the job —
-          // there is nothing to fall back to.
-          if (streamAborted || streamContent) {
-            throw streamErr;
-          }
-          // The endpoint could not stream at all (e.g. a custom
-          // OpenAI-compatible server without SSE support) — fall back to ONE
-          // direct complete generation so the user still gets an answer.
-          const response = await sendChatMessage(chatRequest, abortController.signal);
-          finalizeAssistantMessage(response);
-        }
-      } else {
-        // Progressive streaming (normal mode)
+      // BOTH modes stream progressively from the first token to the last.
+      // Instant Mode only differs in that the server answers directly (zero
+      // thinking lag); it never waits for the full generation before painting.
+      try {
         const response = await sendChatMessageStream(
           chatRequest,
           handleStreamChunk,
           abortController.signal
         );
         finalizeAssistantMessage(response);
+      } catch (streamErr: any) {
+        const streamAborted =
+          abortController.signal.aborted || streamErr?.name === 'AbortError';
+        // User stopped, or content already streamed: keep the partial reply and
+        // let the outer handler finish — there is nothing to fall back to.
+        if (streamAborted || streamContent) {
+          throw streamErr;
+        }
+        // ONLY a transport-level failure (the endpoint could not stream at all)
+        // earns a single non-streaming fallback. A genuine model error inside
+        // the stream is rethrown so it is reported at once instead of being
+        // silently regenerated (the hidden second attempt that doubled latency).
+        if (streamErr instanceof ChatStreamFailedError) {
+          const response = await sendChatMessage(chatRequest, abortController.signal);
+          finalizeAssistantMessage(response);
+        } else {
+          throw streamErr;
+        }
       }
     } catch (err: any) {
       // បញ្ឈប់ការឆ្លើយតប — user pressed Stop while the model was working.
@@ -694,11 +701,8 @@ export default function App() {
       const wasAborted =
         abortController.signal.aborted || err?.name === 'AbortError';
 
-      // A still-scheduled frame flush must not overwrite the stopped state.
-      if (streamRaf) {
-        window.cancelAnimationFrame(streamRaf);
-        streamRaf = 0;
-      }
+      // A still-scheduled painter commit must not overwrite the stopped state.
+      painter.cancel();
 
       setConversations((prev) =>
         prev.map((c) => {

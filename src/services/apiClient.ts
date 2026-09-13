@@ -1,5 +1,23 @@
-import { ModelInfo, ModelParameters, ProviderConfig, ProviderType } from '../types';
+import type { ModelInfo, ModelParameters, ProviderConfig, ProviderType } from '../types';
 import { normalizeBaseUrl } from '../utils/url';
+
+/**
+ * Thrown when the STREAMING TRANSPORT could not be used at all (the endpoint
+ * answered the stream request with an HTTP error, or exposed no readable body)
+ * and not a single token had been received yet.
+ *
+ * This is the ONLY situation in which the app pays for a second, non-streaming
+ * generation. A genuine model error that arrives *inside* the stream is
+ * rethrown as-is, so it is reported immediately instead of being silently
+ * regenerated — that hidden second attempt is what made replies take twice as
+ * long and then appear all at once.
+ */
+export class ChatStreamFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChatStreamFailedError';
+  }
+}
 
 export function cleanErrorMessage(rawError: any): string {
   if (!rawError) return 'An unexpected error occurred.';
@@ -42,6 +60,12 @@ export interface ChatApiRequest {
   parameters: ModelParameters;
   images?: string[];
   providerConfig: ProviderConfig;
+  /**
+   * Instant Mode: the server disables the model's thinking phase so the first
+   * visible token arrives after ONE round trip. The reply is still streamed
+   * progressively from start to finish.
+   */
+  instantMode?: boolean;
 }
 
 export interface ChatApiResponse {
@@ -50,12 +74,15 @@ export interface ChatApiResponse {
   modelUsed: string;
   providerUsed: ProviderType;
   tokensUsed?: number;
+  /** Server-side note (config retry / non-streaming upstream / empty reply). */
+  statusNote?: string;
 }
 
 export interface StreamChunk {
   content?: string;
   reasoning?: string;
   model?: string;
+  status?: string;
 }
 
 export async function sendChatMessageStream(
@@ -63,7 +90,7 @@ export async function sendChatMessageStream(
   onChunk: (chunk: StreamChunk) => void,
   signal?: AbortSignal
 ): Promise<ChatApiResponse> {
-  const { provider, providerModelId, messages, parameters, images, providerConfig } = req;
+  const { provider, providerModelId, messages, parameters, images, providerConfig, instantMode } = req;
   const safeBaseUrl = normalizeBaseUrl(providerConfig.baseUrl);
 
   const res = await fetch('/api/chat?stream=true', {
@@ -78,6 +105,9 @@ export async function sendChatMessageStream(
       messages,
       apiKey: providerConfig.apiKey || undefined,
       baseUrl: safeBaseUrl || undefined,
+      // Tell the SERVER to answer in Instant Mode (thinking phase off) so the
+      // first token is not delayed behind an invisible reasoning pass.
+      instantMode: instantMode ?? parameters.instantMode ?? true,
       parameters: {
         temperature: parameters.temperature,
         maxTokens: parameters.maxTokens,
@@ -91,11 +121,12 @@ export async function sendChatMessageStream(
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(cleanErrorMessage(errText || `HTTP error ${res.status}`));
+    // The transport could not stream at all — let the app fall back ONCE.
+    throw new ChatStreamFailedError(cleanErrorMessage(errText || `HTTP error ${res.status}`));
   }
 
   if (!res.body) {
-    throw new Error('No readable stream available in response.');
+    throw new ChatStreamFailedError('No readable stream available in response.');
   }
 
   const reader = res.body.getReader();
@@ -103,57 +134,78 @@ export async function sendChatMessageStream(
   let buffer = '';
   let fullContent = '';
   let fullReasoning = '';
+  let statusNote = '';
   let modelUsed = providerModelId;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  // A real error inside the stream must abort the read immediately; it is NOT a
+  // transport failure, so it is thrown as a plain Error (no second generation).
+  let streamError: Error | null = null;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(':')) return;
+    if (!trimmed.startsWith('data:')) return;
+    const dataStr = trimmed.replace(/^data:\s*/, '');
+    if (dataStr === '[DONE]') return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(dataStr);
+    } catch {
+      return; // ignore partial JSON
+    }
+    if (parsed.error) {
+      streamError = new Error(cleanErrorMessage(parsed.error));
+      return;
+    }
+    if (parsed.content) fullContent += parsed.content;
+    if (parsed.reasoning) fullReasoning += parsed.reasoning;
+    if (parsed.status) statusNote = parsed.status;
+    if (parsed.model) modelUsed = parsed.model;
+    onChunk({
+      content: parsed.content || '',
+      reasoning: parsed.reasoning || '',
+      model: parsed.model,
+      status: parsed.status,
+    });
+  };
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith(':')) continue;
-      if (trimmed.startsWith('data:')) {
-        const dataStr = trimmed.replace(/^data:\s*/, '');
-        if (dataStr === '[DONE]') {
-          continue;
-        }
-        try {
-          const parsed = JSON.parse(dataStr);
-          if (parsed.error) {
-            throw new Error(cleanErrorMessage(parsed.error));
-          }
-          if (parsed.content) {
-            fullContent += parsed.content;
-          }
-          if (parsed.reasoning) {
-            fullReasoning += parsed.reasoning;
-          }
-          if (parsed.model) {
-            modelUsed = parsed.model;
-          }
-          onChunk({
-            content: parsed.content || '',
-            reasoning: parsed.reasoning || '',
-            model: parsed.model,
-          });
-        } catch (e: any) {
-          if (e.message && !e.message.includes('JSON')) {
-            throw e;
-          }
-        }
+  const onAbort = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  try {
+    while (true) {
+      if (signal?.aborted || streamError) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        handleLine(line);
+        if (streamError) break;
       }
     }
+    if (!streamError && buffer.trim()) {
+      for (const line of buffer.split('\n')) handleLine(line);
+    }
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
   }
+
+  if (streamError) throw streamError;
 
   return {
     content: fullContent,
     reasoning: fullReasoning || undefined,
     modelUsed,
     providerUsed: provider,
+    statusNote: statusNote || undefined,
   };
 }
 
