@@ -238,7 +238,9 @@ async function handleChat(request: Request, url: URL): Promise<Response> {
   const isStream = url.searchParams.get('stream') === 'true' || body.stream === true;
 
   if (isStream) {
-    return streamChatResponse(body);
+    // Forward the request's abort signal so "Stop response" (បញ្ឈប់ការឆ្លើយតប)
+    // cancels the upstream generation instead of letting it run to completion.
+    return streamChatResponse(body, request.signal);
   }
 
   try {
@@ -251,29 +253,42 @@ async function handleChat(request: Request, url: URL): Promise<Response> {
   }
 }
 
-function streamChatResponse(body: any): Response {
+function streamChatResponse(body: any, signal?: AbortSignal): Response {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
       const send = (payload: unknown) => {
+        if (closed) return;
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         } catch {
-          // Stream might be cancelled or closed by the client
+          closed = true; // Stream cancelled or closed by the client
         }
       };
 
+      // Opening comment: the browser sees an open stream before the model
+      // replies, so a slow first token never looks like a stalled request.
       try {
-        await handleChatStreamRequest(body, send);
-        try {
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        } catch {}
+        controller.enqueue(encoder.encode(':ok\n\n'));
+      } catch {}
+
+      try {
+        await handleChatStreamRequest(body, send, signal);
+        if (!closed) {
+          try {
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          } catch {}
+        }
       } catch (err: any) {
-        const cleanMsg = parseApiErrorMessage(err);
-        console.error('Chat streaming error:', cleanMsg);
-        send({ error: cleanMsg });
+        if (!signal?.aborted && !closed) {
+          const cleanMsg = parseApiErrorMessage(err);
+          console.error('Chat streaming error:', cleanMsg);
+          send({ error: cleanMsg });
+        }
       } finally {
+        closed = true;
         try {
           controller.close();
         } catch {}
@@ -285,6 +300,8 @@ function streamChatResponse(body: any): Response {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
+      // Defeat any edge/proxy response buffering so tokens are not held back.
+      'X-Accel-Buffering': 'no',
       ...CORS_HEADERS,
     },
   });

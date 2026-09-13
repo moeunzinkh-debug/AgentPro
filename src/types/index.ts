@@ -67,6 +67,12 @@ export interface ChatMessage {
   stopped?: boolean;
   errorMsg?: string;
   tokensUsed?: number;
+  /**
+   * Short server-side note shown under a streaming reply: a rejected-config
+   * retry, a non-streaming upstream that delivered its answer as one block, or
+   * an empty generation. Explains a pause instead of leaving a bare spinner.
+   */
+  statusNote?: string;
 }
 
 export interface Conversation {

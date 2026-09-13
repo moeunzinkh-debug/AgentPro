@@ -92,8 +92,13 @@ wrangler.jsonc           # Cloudflare Workers config
 | `npm run dev:worker` | Run the Cloudflare Worker locally on `0.0.0.0:8787`; Wrangler auto-builds the frontend first |
 | `npm run build` | Build the frontend to `dist/` |
 | `npm run deploy` | Deploy to Cloudflare Workers; Wrangler auto-builds the frontend first |
-| `npm start` | Serve production build via Express (Node) |
+| `npm start` | Serve production build via Express (Node); honors `PORT` (default 3000) |
 | `npm run lint` | Type-check with `tsc --noEmit` |
+| `npm run test:streaming` | Node-only streaming regression suite (server SSE + client stream painter) — no API keys, no browser |
+| `npm run test:server` | Server half of the streaming suite (`handleChatStreamRequest`) |
+| `npm run test:painter` | Client half of the streaming suite (`createStreamPainter`) |
+| `npm run test:dom` | Renders the real `<App/>` in jsdom and asserts the reply paints progressively (no browser download needed) |
+| `npm run diag:gemini-latency` | Reproduce/measure Gemini time-to-first-token against a real or mock upstream |
 
 ## Gradient UI & Worker sync
 
@@ -116,12 +121,60 @@ and serves `dist/` as Worker static assets. The release marker in
 Rule: bump `UI_VERSION` in `src/uiVersion.ts` on every UI change, then
 `npm run deploy` so the new gradient bundle is included in the Worker.
 
+## Streaming & Instant Mode (progressive replies)
+
+Every reply — **including Instant Mode** — streams progressively from the first
+token to the last. Instant Mode only disables the model's *thinking* phase so
+the first visible token arrives after a single round trip; it never means
+"generate the whole answer, then display it". Long documents/texts therefore
+start showing immediately instead of wasting time behind a spinner.
+
+Six root causes of the old "វាបង្កើតរួចរាល់ទាំងអស់ទើបបង្ហាញ" (generates
+everything first, only then displays) symptom were fixed:
+
+1. **Gemini thinking config** — the server hard-coded `thinkingLevel: LOW` for
+   every model. Gemini 2.x rejects that field (400), so each request was sent
+   twice, and the retry fell back to *dynamic* thinking whose thought-only
+   chunks (`chunk.text === undefined`) were discarded — the UI stayed blank
+   while the model thought, then painted the answer at once. `apiRouter.ts` now
+   sends the right config per model (`buildGeminiConfigLadder`): 3.x →
+   `thinkingLevel: minimal`, 2.5 → `thinkingBudget: 0` (pro: `128`), 2.0/1.5 →
+   none (keeping the full `topP`/`temperature`). A rejected config retries the
+   **same** model down a ladder — never cascading to a worse fallback — and
+   streams thought chunks as `reasoning` when thinking is on.
+2. **Client painting** — tokens were committed only from a
+   `requestAnimationFrame` callback, which never fires in a hidden tab / dimmed
+   phone / off-screen preview iframe, so the reply buffered and appeared in one
+   jump. `src/services/streamPainter.ts` commits the first token immediately and
+   schedules every later commit with rAF **and** a `setTimeout` watchdog, with an
+   adaptive throttle as the reply grows.
+3. **Blanket non-stream fallback** — the app used to regenerate on *any* stream
+   error (a hidden second full generation). It now falls back to a single
+   non-streaming request **only** on a transport failure
+   (`ChatStreamFailedError`); a genuine model error is reported at once.
+4. **SSE transport buffering** — `src/server/sse.ts` sets `X-Accel-Buffering: no`
+   + `no-transform`, disables Nagle (`setNoDelay`), emits an opening `:ok`, and
+   keeps the pipe hot with a 15s heartbeat, so proxies never hold tokens back.
+5. **Non-SSE upstreams** — an endpoint that ignores `stream: true` now has its
+   JSON answer delivered as one block **plus** a status note, instead of an empty
+   bubble stuck on "is generating response…".
+6. **Empty replies** — finalized as an error with a Retry path, never a stuck
+   spinner.
+
+"Stop response" (បញ្ឈប់ការឆ្លើយតប) forwards an `AbortSignal` all the way to the
+upstream read, cancelling generation immediately.
+
 ## UI regression tests
 
 ```bash
 npx playwright install --with-deps chromium  # one-time browser setup
 npm run test:e2e
 ```
+
+Streaming behaviour is covered without a browser download by
+`npm run test:streaming` (Node logic: server SSE + client painter) and
+`npm run test:dom` (the real `<App/>` in jsdom). `tests/streaming-instant-mode.spec.ts`
+mirrors the same guarantees for the Playwright suite when a browser is available.
 
 The suite checks Chat / Tasks / Models / Settings navigation, reachable workflow
 controls, model selection, and viewport resizing at phone, tablet, and desktop

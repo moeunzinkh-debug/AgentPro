@@ -1,6 +1,168 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import { ModelInfo, ProviderType } from '../types';
-import { normalizeBaseUrl } from '../utils/url';
+import type { ModelInfo, ProviderType } from '../types';
+import { normalizeBaseUrl } from '../utils/url.ts';
+
+/**
+ * One streamed frame forwarded to the client.
+ *
+ * `status` carries a short, human-readable note about what the server had to do
+ * (retry a rejected generation config, fall back because the upstream ignored
+ * `stream: true`, …). The UI shows it as a hint instead of leaving the user
+ * staring at a spinner with no explanation.
+ */
+export interface StreamChunkPayload {
+  content?: string;
+  reasoning?: string;
+  model?: string;
+  status?: string;
+}
+
+/**
+ * Thrown when the streaming transport itself cannot be used (the upstream
+ * refused the request outright). The client answers it with exactly ONE
+ * non-streaming fallback generation — and only then, so a genuine model error
+ * is never paid for twice.
+ */
+export class ChatStreamUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChatStreamUnsupportedError';
+  }
+}
+
+/**
+ * Thrown when the upstream answered 200 but did not honour `stream: true`
+ * (a plain JSON body instead of SSE). The answer is still delivered — as one
+ * block plus a status note — so the bubble never hangs on "generating…".
+ */
+export class UpstreamStreamError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UpstreamStreamError';
+  }
+}
+
+/** True when Gemini rejected the *generation config* (not the model/key). */
+function isGeminiParamRejection(err: any): boolean {
+  const msg = err?.message || String(err || '');
+  return (
+    msg.includes('thinkingConfig') ||
+    msg.includes('thinkingLevel') ||
+    msg.includes('thinkingBudget') ||
+    msg.includes('includeThoughts') ||
+    msg.includes('Unknown name') ||
+    msg.includes('Cannot find field') ||
+    msg.includes('invalid argument') ||
+    msg.includes('INVALID_ARGUMENT') ||
+    err?.status === 400 ||
+    msg.includes('(400)')
+  );
+}
+
+/**
+ * ROOT CAUSE of the "instant mode waits, then dumps the whole answer" bug.
+ *
+ * The Gemini branch used to hard-code `thinkingConfig: { thinkingLevel: LOW }`
+ * for every model. No Gemini 2.x model accepts `thinkingLevel` (it is a 3.x
+ * field), so the very first request was rejected with a 400 — a full wasted
+ * round trip — and the retry dropped the thinking config entirely, which means
+ * "dynamic thinking": the model spent seconds emitting *thought-only* chunks
+ * (`part.thought === true`, `chunk.text === undefined`). Those chunks were
+ * discarded, so the UI showed nothing while the model was thinking and then
+ * painted the answer as soon as the visible text finally arrived — looking
+ * exactly like "it generated everything first and only then displayed it".
+ *
+ * The ladder below sends the RIGHT thinking config for the model on the FIRST
+ * attempt:
+ *   • Instant Mode  → thinking disabled (budget 0 / level minimal), so the first
+ *                     visible token arrives after a single round trip;
+ *   • thinking on   → `includeThoughts: true`, so the thoughts themselves stream
+ *                     back as `reasoning` and the user watches progress.
+ * If a config is still rejected we retry the SAME model with the next, less
+ * specific config (never cascade straight to a worse fallback model).
+ */
+function buildGeminiConfigLadder(
+  modelName: string,
+  opts: { instantMode: boolean; temperature: number; maxOutputTokens: number; topP: number; sysPrompt: string }
+): Array<{ label: string; config: Record<string, any> }> {
+  const m = modelName.toLowerCase();
+  const base = {
+    systemInstruction: opts.sysPrompt,
+    temperature: opts.temperature,
+    maxOutputTokens: opts.maxOutputTokens,
+    topP: opts.topP,
+  };
+
+  // Gemini 3.x: `thinkingLevel` is the only accepted thinking knob.
+  if (/(^|[^0-9.])3(\.|$|-)/.test(m) || m.includes('gemini-3')) {
+    const minimal = (ThinkingLevel as any)?.MINIMAL ?? 'minimal';
+    return opts.instantMode
+      ? [
+          { label: 'thinkingLevel minimal', config: { ...base, thinkingConfig: { thinkingLevel: minimal } } },
+          { label: 'thinkingBudget 0', config: { ...base, thinkingConfig: { thinkingBudget: 0 } } },
+          { label: 'no thinkingConfig', config: { ...base } },
+        ]
+      : [
+          {
+            label: 'thinkingLevel low + thoughts',
+            config: { ...base, thinkingConfig: { thinkingLevel: (ThinkingLevel as any)?.LOW ?? 'low', includeThoughts: true } },
+          },
+          { label: 'thinkingBudget -1 + thoughts', config: { ...base, thinkingConfig: { thinkingBudget: -1, includeThoughts: true } } },
+          { label: 'no thinkingConfig', config: { ...base } },
+        ];
+  }
+
+  // Gemini 2.5: `thinkingBudget` (pro refuses 0 — its minimum is 128).
+  if (m.includes('2.5')) {
+    const isPro = m.includes('pro');
+    return opts.instantMode
+      ? [
+          { label: 'thinkingBudget 0', config: { ...base, thinkingConfig: { thinkingBudget: isPro ? 128 : 0 } } },
+          { label: 'no thinkingConfig', config: { ...base } },
+        ]
+      : [
+          { label: 'thinkingBudget -1 + thoughts', config: { ...base, thinkingConfig: { thinkingBudget: -1, includeThoughts: true } } },
+          { label: 'no thinkingConfig', config: { ...base } },
+        ];
+  }
+
+  // Gemini 2.0 / 1.5: no `thinkingLevel`, and 1.5 only accepts a budget.
+  const budgetOnly = m.includes('1.5');
+  if (opts.instantMode) {
+    return budgetOnly
+      ? [
+          { label: 'thinkingBudget 0', config: { ...base, thinkingConfig: { thinkingBudget: 0 } } },
+          { label: 'no thinkingConfig', config: { ...base } },
+        ]
+      : [{ label: 'no thinkingConfig', config: { ...base } }];
+  }
+  return budgetOnly
+    ? [
+        { label: 'thinkingBudget -1 + thoughts', config: { ...base, thinkingConfig: { thinkingBudget: -1, includeThoughts: true } } },
+        { label: 'no thinkingConfig', config: { ...base } },
+      ]
+    : [{ label: 'no thinkingConfig', config: { ...base } }];
+}
+
+/**
+ * Split one streamed Gemini response into visible text and thoughts.
+ *
+ * `chunk.text` concatenates every part and is `undefined` for thought-only
+ * chunks — relying on it is what made the whole thinking phase invisible.
+ */
+function splitGeminiChunk(chunk: any): { content: string; reasoning: string } {
+  let content = '';
+  let reasoning = '';
+  for (const candidate of chunk?.candidates || []) {
+    for (const part of candidate?.content?.parts || []) {
+      const text = part?.text;
+      if (!text) continue;
+      if (part?.thought) reasoning += text;
+      else content += text;
+    }
+  }
+  return { content, reasoning };
+}
 
 export function parseApiErrorMessage(err: any): string {
   if (!err) return 'Unknown error occurred';
@@ -92,6 +254,13 @@ export interface ChatRequestBody {
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   apiKey?: string;
   baseUrl?: string;
+  /**
+   * Instant Mode: answer directly with the thinking phase disabled so the first
+   * visible token arrives after ONE round trip. The reply is still streamed
+   * progressively from start to finish — Instant Mode never means "generate
+   * everything first, then display".
+   */
+  instantMode?: boolean;
   parameters?: {
     temperature?: number;
     maxTokens?: number;
@@ -719,7 +888,8 @@ export async function handleChatRequest(body: ChatRequestBody): Promise<{
 
 export async function handleChatStreamRequest(
   body: ChatRequestBody,
-  onChunk: (chunk: { content?: string; reasoning?: string; model?: string }) => void
+  onChunk: (chunk: StreamChunkPayload) => void,
+  signal?: AbortSignal
 ): Promise<void> {
   const { provider, model, messages, apiKey, baseUrl: rawBaseUrl, parameters, images } = body;
   // Repair common base URL typos (e.g. "ttps://..." -> "https://...") before any fetch.
@@ -761,56 +931,73 @@ export async function handleChatStreamRequest(
     }
 
     const candidateModels = getGeminiCandidateModels(model || 'gemini-2.5-flash');
+    const instantMode = body.instantMode !== false; // Gemini defaults to Instant Mode
     let lastError: any = null;
     let streamStarted = false;
 
     for (let i = 0; i < candidateModels.length; i++) {
       const activeModel = candidateModels[i];
+      // The RIGHT thinking config for THIS model, tried in order. A rejected
+      // config retries the SAME model — it must never cascade to a worse one.
+      const ladder = buildGeminiConfigLadder(activeModel, {
+        instantMode,
+        temperature: parameters?.temperature ?? 0.7,
+        maxOutputTokens: parameters?.maxTokens ?? 4096,
+        topP: parameters?.topP ?? 0.95,
+        sysPrompt,
+      });
+
       try {
-        let responseStream;
-        try {
-          responseStream = await ai.models.generateContentStream({
-            model: activeModel,
-            contents: contents.length > 0 ? contents : 'Hello',
-            config: {
-              systemInstruction: sysPrompt,
-              temperature: parameters?.temperature ?? 0.7,
-              maxOutputTokens: parameters?.maxTokens ?? 4096,
-              topP: parameters?.topP ?? 0.95,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            },
-          });
-        } catch (innerErr: any) {
-          const innerMsg = innerErr?.message || String(innerErr);
-          if (
-            innerMsg.includes('invalid argument') ||
-            innerMsg.includes('INVALID_ARGUMENT') ||
-            innerErr?.status === 400 ||
-            innerMsg.includes('thinkingConfig')
-          ) {
+        let responseStream: any = null;
+        let usedLabel = '';
+        let ladderError: any = null;
+
+        for (let c = 0; c < ladder.length; c++) {
+          const rung = ladder[c];
+          try {
             responseStream = await ai.models.generateContentStream({
               model: activeModel,
               contents: contents.length > 0 ? contents : 'Hello',
-              config: {
-                systemInstruction: sysPrompt,
-                temperature: parameters?.temperature ?? 0.7,
-                maxOutputTokens: parameters?.maxTokens ?? 4096,
-                topP: parameters?.topP ?? 0.95,
-              },
+              config: rung.config as any,
             });
-          } else {
-            throw innerErr;
+            usedLabel = rung.label;
+            ladderError = null;
+            break;
+          } catch (cfgErr: any) {
+            ladderError = cfgErr;
+            if (signal?.aborted) throw cfgErr;
+            // Only a *config* rejection walks the ladder; anything else
+            // (auth, quota, 404…) is handled by the outer model loop.
+            if (!isGeminiParamRejection(cfgErr) || c === ladder.length - 1) {
+              throw cfgErr;
+            }
+            console.warn(
+              `Gemini ${activeModel} rejected "${rung.label}" (${String(cfgErr?.message || cfgErr).slice(0, 60)}), retrying same model with "${ladder[c + 1].label}"…`
+            );
+            // Tell the user why there was a brief pause instead of leaving them
+            // staring at a spinner with no explanation.
+            onChunk({
+              status: `កំពុងព្យាយាមម្ដងទៀតជាមួយ ${activeModel} (retrying with adjusted parameters)…`,
+              model: activeModel,
+            });
           }
         }
 
+        if (!responseStream) throw ladderError || new Error('No stream returned');
+
         for await (const chunk of responseStream) {
-          if (chunk.text) {
+          if (signal?.aborted) break;
+          // `chunk.text` is undefined for thought-only chunks — splitting the
+          // parts is what lets the thinking phase stream as visible progress.
+          const { content, reasoning } = splitGeminiChunk(chunk);
+          if (content || reasoning) {
             streamStarted = true;
-            onChunk({ content: chunk.text, model: activeModel });
+            onChunk({ content, reasoning, model: activeModel });
           }
         }
         return;
       } catch (err: any) {
+        if (signal?.aborted) throw err;
         lastError = err;
         const errMsg = err?.message || String(err);
         const isTemporary =
@@ -937,6 +1124,10 @@ export async function handleChatStreamRequest(
   const upstreamResponse = await fetch(fullUrl, {
     method: 'POST',
     headers,
+    // Forwarding the abort signal is what makes "Stop response" (បញ្ឈប់ការឆ្លើយតប)
+    // cancel the upstream generation immediately instead of letting it run to
+    // completion in the background.
+    signal,
     body: JSON.stringify({
       model: defaultModel,
       messages: formattedMessages,
@@ -954,63 +1145,128 @@ export async function handleChatStreamRequest(
       const j = JSON.parse(errText);
       parsedMsg = j.error?.message || j.message || errText;
     } catch {}
-    throw new Error(`API Error (${upstreamResponse.status}): ${parsedMsg}`);
+    throw new ChatStreamUnsupportedError(`API Error (${upstreamResponse.status}): ${parsedMsg}`);
   }
 
   if (!upstreamResponse.body) {
-    throw new Error('No response stream received from upstream API.');
+    throw new ChatStreamUnsupportedError('No response stream received from upstream API.');
   }
 
+  // Some OpenAI-compatible endpoints silently ignore `stream: true` and reply
+  // with one JSON object. Detect that from the first bytes so the answer is
+  // still delivered (with a status note) instead of an empty bubble stuck on
+  // "is generating response…".
+  const contentType = (upstreamResponse.headers.get('content-type') || '').toLowerCase();
   const reader = upstreamResponse.body.getReader();
   const decoder = new TextDecoder('utf-8');
-  let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  const first = await reader.read();
+  if (first.done) {
+    onChunk({
+      status: 'ម៉ូដែលបានបិទការឆ្លើយតបដោយគ្មានអត្ថបទ (the upstream closed the stream without sending any text).',
+      model: defaultModel,
+    });
+    return;
+  }
+  let buffer = decoder.decode(first.value, { stream: true });
+  const looksLikeSse =
+    contentType.includes('text/event-stream') ||
+    contentType.includes('stream') ||
+    /^\s*(:|data:|event:)/.test(buffer);
 
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith(':')) continue;
-      if (trimmed.startsWith('data:')) {
-        const dataStr = trimmed.replace(/^data:\s*/, '');
-        if (dataStr === '[DONE]') {
-          continue;
-        }
-        try {
-          const parsed = JSON.parse(dataStr);
-          const choice = parsed.choices?.[0];
-          const delta = choice?.delta;
-          const content = delta?.content || '';
-          const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thought || '';
-          if (content || reasoning) {
-            onChunk({ content, reasoning, model: parsed.model || defaultModel });
-          }
-        } catch {
-          // ignore partial JSON
-        }
-      }
+  if (!looksLikeSse) {
+    // Non-streaming JSON answer: read it fully, then deliver it as one block.
+    while (true) {
+      if (signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
     }
+    buffer += decoder.decode();
+
+    let text = '';
+    let reasoning = '';
+    let usedModel = defaultModel;
+    try {
+      const parsed = JSON.parse(buffer);
+      const choice = parsed.choices?.[0];
+      text = choice?.message?.content || choice?.text || parsed.content || '';
+      reasoning =
+        choice?.message?.reasoning_content ||
+        choice?.message?.reasoning ||
+        choice?.message?.thought ||
+        '';
+      usedModel = parsed.model || defaultModel;
+    } catch {
+      text = buffer;
+    }
+
+    if (text || reasoning) onChunk({ content: text, reasoning, model: usedModel });
+    onChunk({
+      status:
+        'ចំណាំ៖ ម៉ូដែលនេះមិនបានបើកការ streaming ទេ ដូច្នេះចម្លើយត្រូវបានបង្ហាញជាប្លុកតែមួយ (this endpoint did not honour streaming, so the answer arrived as a single block).',
+      model: usedModel,
+    });
+    return;
   }
 
-  if (buffer.trim().startsWith('data:')) {
-    const dataStr = buffer.trim().replace(/^data:\s*/, '');
-    if (dataStr !== '[DONE]') {
-      try {
-        const parsed = JSON.parse(dataStr);
-        const choice = parsed.choices?.[0];
-        const delta = choice?.delta;
-        const content = delta?.content || '';
-        const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thought || '';
-        if (content || reasoning) {
-          onChunk({ content, reasoning, model: parsed.model || defaultModel });
-        }
-      } catch {}
+  /** Parse one SSE `data:` line and forward any delta to the client. */
+  const feedLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(':')) return;
+    if (!trimmed.startsWith('data:')) return;
+    const dataStr = trimmed.replace(/^data:\s*/, '');
+    if (dataStr === '[DONE]') return;
+    try {
+      const parsed = JSON.parse(dataStr);
+      if (parsed.error) {
+        throw new UpstreamStreamError(
+          typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || 'Upstream stream error'
+        );
+      }
+      const choice = parsed.choices?.[0];
+      const delta = choice?.delta;
+      const content = delta?.content || '';
+      const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thought || '';
+      if (content || reasoning) {
+        onChunk({ content, reasoning, model: parsed.model || defaultModel });
+      }
+    } catch (e: any) {
+      // Ignore partial JSON, but never swallow a real upstream error.
+      if (e instanceof UpstreamStreamError) throw e;
     }
+  };
+
+  // Cancelling the reader is what actually stops the upstream read the moment
+  // the user presses Stop — `signal.aborted` alone would only notice on the
+  // next chunk, which can be seconds away on a slow model.
+  const onAbort = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  try {
+    while (true) {
+      if (signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) feedLine(line);
+    }
+
+    // Flush a final frame that arrived without a trailing newline.
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      for (const line of buffer.split('\n')) feedLine(line);
+    }
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
   }
 }
 
